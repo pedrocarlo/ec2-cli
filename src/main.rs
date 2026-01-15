@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod aws;
 mod error;
 mod profile;
 
