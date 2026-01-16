@@ -1,6 +1,7 @@
 # ec2-cli Agent Guide
 
-Ephemeral EC2 Development Environment Manager - a Rust CLI tool for launching and managing temporary EC2 instances for remote development.
+Ephemeral EC2 Development Environment Manager - a Rust CLI tool for launching and managing temporary EC2 instances for
+remote development.
 
 ## Build & Test Commands
 
@@ -72,32 +73,36 @@ src/
 ## Code Patterns
 
 ### Error Handling
+
 - Custom `Ec2CliError` enum in `src/error.rs` using `thiserror`
 - `Result<T>` alias for `Result<T, Ec2CliError>`
 - Use `anyhow::Result` at main() for top-level errors
 
 ### Async
+
 - Commands that call AWS APIs are async (`up`, `destroy`, `status`, `config init`)
 - Commands that shell out to external tools are sync (`ssh`, `scp`, `push`, `pull`, `logs`)
 
 ### AWS Client
+
 - Clients initialized from default config with region
 - All resources tagged with `ec2-cli:managed=true` and custom tags
 
 ### Profiles
+
 - JSON5 format for readability
 - Loaded from `~/.config/ec2-cli/profiles/` or `.ec2-cli/profiles/`
 - Default profile embedded in code
 
 ## Configuration Files
 
-| Path | Purpose |
-|------|---------|
-| `~/.config/ec2-cli/config.json` | Custom tags and settings |
-| `~/.config/ec2-cli/profiles/` | Global profiles |
-| `~/.local/state/ec2-cli/state.json` | Instance state tracking |
-| `.ec2-cli/profiles/` | Project-local profiles |
-| `.ec2-cli/instance` | Linked instance name |
+| Path                                | Purpose                  |
+|-------------------------------------|--------------------------|
+| `~/.config/ec2-cli/config.json`     | Custom tags and settings |
+| `~/.config/ec2-cli/profiles/`       | Global profiles          |
+| `~/.local/state/ec2-cli/state.json` | Instance state tracking  |
+| `.ec2-cli/profiles/`                | Project-local profiles   |
+| `.ec2-cli/instance`                 | Linked instance name     |
 
 ## Adding a New Command
 
