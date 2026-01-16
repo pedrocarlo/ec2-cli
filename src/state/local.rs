@@ -152,7 +152,15 @@ pub fn save_instance(
     ssh_key_path: Option<&str>,
 ) -> Result<()> {
     let mut state = State::load()?;
-    state.add_instance(name, instance_id, profile, region, username, security_group_id, ssh_key_path);
+    state.add_instance(
+        name,
+        instance_id,
+        profile,
+        region,
+        username,
+        security_group_id,
+        ssh_key_path,
+    );
     state.save()
 }
 
@@ -224,11 +232,25 @@ mod tests {
     fn test_state_operations() {
         let mut state = State::default();
 
-        state.add_instance("test-instance", "i-123456", "default", "us-west-2", "ubuntu", "sg-12345678", Some("/home/user/.ssh/id_ed25519"));
+        state.add_instance(
+            "test-instance",
+            "i-123456",
+            "default",
+            "us-west-2",
+            "ubuntu",
+            "sg-12345678",
+            Some("/home/user/.ssh/id_ed25519"),
+        );
         assert!(state.get_instance("test-instance").is_some());
-        assert_eq!(state.get_instance("test-instance").unwrap().username, "ubuntu");
         assert_eq!(
-            state.get_instance("test-instance").unwrap().security_group_id,
+            state.get_instance("test-instance").unwrap().username,
+            "ubuntu"
+        );
+        assert_eq!(
+            state
+                .get_instance("test-instance")
+                .unwrap()
+                .security_group_id,
             Some("sg-12345678".to_string())
         );
         assert_eq!(
@@ -245,7 +267,15 @@ mod tests {
     fn test_state_with_ubuntu_user() {
         let mut state = State::default();
 
-        state.add_instance("ubuntu-instance", "i-789", "ubuntu-profile", "us-east-1", "ubuntu", "sg-abc", None);
+        state.add_instance(
+            "ubuntu-instance",
+            "i-789",
+            "ubuntu-profile",
+            "us-east-1",
+            "ubuntu",
+            "sg-abc",
+            None,
+        );
         let instance = state.get_instance("ubuntu-instance").unwrap();
         assert_eq!(instance.username, "ubuntu");
         assert_eq!(instance.ssh_key_path, None);

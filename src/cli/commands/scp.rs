@@ -9,8 +9,8 @@ pub fn execute(name: String, src: String, dest: String, recursive: bool) -> Resu
     let name = resolve_instance_name(Some(&name))?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
     // Parse source and destination to determine direction
     let (local_path, remote_path, is_upload) = parse_paths(&src, &dest)?;

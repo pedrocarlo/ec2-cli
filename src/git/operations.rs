@@ -111,10 +111,7 @@ pub fn add_remote(name: &str, url: &str) -> Result<()> {
         .map_err(|e| Ec2CliError::Git(e.to_string()))?;
 
     if !status.success() {
-        return Err(Ec2CliError::Git(format!(
-            "Failed to add remote '{}'",
-            name
-        )));
+        return Err(Ec2CliError::Git(format!("Failed to add remote '{}'", name)));
     }
 
     Ok(())

@@ -9,13 +9,10 @@ pub fn execute(name: String, command: Option<String>) -> Result<()> {
     let name = resolve_instance_name(Some(&name))?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
-    let target = format!(
-        "{}@{}",
-        instance_state.username, instance_state.instance_id
-    );
+    let target = format!("{}@{}", instance_state.username, instance_state.instance_id);
 
     let mut cmd = Command::new("ssh");
 

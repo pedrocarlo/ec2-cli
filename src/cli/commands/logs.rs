@@ -8,8 +8,8 @@ pub fn execute(name: String, follow: bool) -> Result<()> {
     let name = resolve_instance_name(Some(&name))?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
     let instance_id = &instance_state.instance_id;
     let username = &instance_state.username;

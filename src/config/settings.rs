@@ -36,8 +36,7 @@ pub struct Settings {
 impl Settings {
     /// Get the path to the config file
     pub fn config_path() -> Option<PathBuf> {
-        ProjectDirs::from("", "", "ec2-cli")
-            .map(|dirs| dirs.config_dir().join("config.json"))
+        ProjectDirs::from("", "", "ec2-cli").map(|dirs| dirs.config_dir().join("config.json"))
     }
 
     /// Load settings from the config file
@@ -50,9 +49,8 @@ impl Settings {
         }
 
         let content = std::fs::read_to_string(&path)?;
-        let settings: Settings = serde_json::from_str(&content).map_err(|e| {
-            Ec2CliError::Config(format!("Failed to parse config file: {}", e))
-        })?;
+        let settings: Settings = serde_json::from_str(&content)
+            .map_err(|e| Ec2CliError::Config(format!("Failed to parse config file: {}", e)))?;
 
         Ok(settings)
     }
@@ -104,7 +102,10 @@ impl Settings {
                 "Tag key cannot start with 'aws:' (reserved prefix)".to_string(),
             ));
         }
-        if !key.chars().all(|c| c.is_ascii() && (' '..='~').contains(&c)) {
+        if !key
+            .chars()
+            .all(|c| c.is_ascii() && (' '..='~').contains(&c))
+        {
             return Err(Ec2CliError::Config(
                 "Tag key must contain only ASCII printable characters".to_string(),
             ));
@@ -119,7 +120,10 @@ impl Settings {
                 "Tag value cannot exceed 256 characters".to_string(),
             ));
         }
-        if !value.chars().all(|c| c.is_ascii() && (' '..='~').contains(&c)) {
+        if !value
+            .chars()
+            .all(|c| c.is_ascii() && (' '..='~').contains(&c))
+        {
             return Err(Ec2CliError::Config(
                 "Tag value must contain only ASCII printable characters".to_string(),
             ));
@@ -162,7 +166,11 @@ impl Settings {
             )));
         }
         // Check that the last part is a number
-        if parts.last().map(|p| p.parse::<u32>().is_err()).unwrap_or(true) {
+        if parts
+            .last()
+            .map(|p| p.parse::<u32>().is_err())
+            .unwrap_or(true)
+        {
             return Err(Ec2CliError::Config(format!(
                 "Invalid AWS region format: '{}'. Expected format like 'us-east-1'",
                 region
@@ -232,7 +240,9 @@ mod tests {
     #[test]
     fn test_remove_tag() {
         let mut settings = Settings::default();
-        settings.tags.insert("Username".to_string(), "testuser".to_string());
+        settings
+            .tags
+            .insert("Username".to_string(), "testuser".to_string());
         let removed = settings.remove_tag("Username");
         assert_eq!(removed, Some("testuser".to_string()));
         assert!(!settings.tags.contains_key("Username"));
@@ -242,7 +252,9 @@ mod tests {
     fn test_has_username_tag() {
         let mut settings = Settings::default();
         assert!(!settings.has_username_tag());
-        settings.tags.insert("Username".to_string(), "testuser".to_string());
+        settings
+            .tags
+            .insert("Username".to_string(), "testuser".to_string());
         assert!(settings.has_username_tag());
     }
 }

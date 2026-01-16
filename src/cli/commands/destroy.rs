@@ -15,8 +15,8 @@ pub async fn execute(name: String, force: bool) -> Result<()> {
     let name = resolve_instance_name(Some(&name))?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
     // Confirm destruction unless forced
     if !force {
@@ -43,15 +43,29 @@ pub async fn execute(name: String, force: bool) -> Result<()> {
     spinner.finish_with_message("Connected to AWS");
 
     // Terminate the instance
-    let spinner = create_spinner(format!("Terminating EC2 instance {}...", instance_state.instance_id));
+    let spinner = create_spinner(format!(
+        "Terminating EC2 instance {}...",
+        instance_state.instance_id
+    ));
     terminate_instance(&clients, &instance_state.instance_id).await?;
-    spinner.finish_with_message(format!("Instance {} terminating", instance_state.instance_id));
+    spinner.finish_with_message(format!(
+        "Instance {} terminating",
+        instance_state.instance_id
+    ));
 
     // Wait for instance to fully terminate before deleting security group
     // The ENI isn't released until the instance reaches "terminated" state
     let spinner = create_spinner("Waiting for instance to terminate...");
-    wait_for_terminated(&clients, &instance_state.instance_id, TERMINATION_TIMEOUT_SECS).await?;
-    spinner.finish_with_message(format!("Instance {} terminated", instance_state.instance_id));
+    wait_for_terminated(
+        &clients,
+        &instance_state.instance_id,
+        TERMINATION_TIMEOUT_SECS,
+    )
+    .await?;
+    spinner.finish_with_message(format!(
+        "Instance {} terminated",
+        instance_state.instance_id
+    ));
 
     // Remove from state early - instance is confirmed terminated
     // This makes the operation more resilient if cleanup steps fail or crash

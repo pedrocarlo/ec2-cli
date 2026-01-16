@@ -51,9 +51,8 @@ pub async fn execute(
     profile.validate()?;
 
     // Generate instance name if not provided
-    let name = instance_name.unwrap_or_else(|| {
-        petname::petname(2, "-").unwrap_or_else(|| "ec2-instance".to_string())
-    });
+    let name = instance_name
+        .unwrap_or_else(|| petname::petname(2, "-").unwrap_or_else(|| "ec2-instance".to_string()));
 
     // Determine username based on AMI type
     let username = get_username_for_ami(&profile.instance.ami.ami_type);
@@ -61,7 +60,10 @@ pub async fn execute(
     println!("Launching EC2 instance '{}'...", name);
     println!("  Profile: {}", profile.name);
     println!("  Instance type: {}", profile.instance.instance_type);
-    println!("  AMI type: {} (user: {})", profile.instance.ami.ami_type, username);
+    println!(
+        "  AMI type: {} (user: {})",
+        profile.instance.ami.ami_type, username
+    );
 
     // Initialize AWS clients
     let spinner = create_spinner("Connecting to AWS...");
@@ -74,9 +76,7 @@ pub async fn execute(
     spinner.finish_with_message("Infrastructure ready");
 
     // Load custom tags for security group
-    let custom_tags = Settings::load()
-        .map(|s| s.tags)
-        .unwrap_or_default();
+    let custom_tags = Settings::load().map(|s| s.tags).unwrap_or_default();
 
     // Create per-instance security group
     let spinner = create_spinner("Creating security group...");
@@ -180,7 +180,8 @@ pub async fn execute(
     // Wait for git repo to be ready (only if project is configured)
     if project_name.is_some() {
         let spinner = create_spinner("Waiting for git repo setup...");
-        if let Err(e) = wait_for_git_ready(&instance_id, username, Some(&ssh_key_path_str), 300).await
+        if let Err(e) =
+            wait_for_git_ready(&instance_id, username, Some(&ssh_key_path_str), 300).await
         {
             spinner.finish_and_clear();
             print_cleanup_warning(&name, &instance_id, &security_group_id, &clients.region);
@@ -211,7 +212,10 @@ pub async fn execute(
 
     if let Some(ref proj) = project_name {
         println!("  Push code with: ec2-cli push {}", name);
-        println!("  Git remote: {}@{}:/home/{}/repos/{}.git", username, instance_id, username, proj);
+        println!(
+            "  Git remote: {}@{}:/home/{}/repos/{}.git",
+            username, instance_id, username, proj
+        );
     }
 
     Ok(())

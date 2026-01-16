@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use aws_sdk_ec2::types::{
-    BlockDeviceMapping, EbsBlockDevice, Filter, HttpTokensState,
-    InstanceMetadataEndpointState, InstanceMetadataOptionsRequest, InstanceStateName,
-    InstanceType as AwsInstanceType,
+    BlockDeviceMapping, EbsBlockDevice, Filter, HttpTokensState, InstanceMetadataEndpointState,
+    InstanceMetadataOptionsRequest, InstanceStateName, InstanceType as AwsInstanceType,
 };
 use uuid::Uuid;
 
@@ -30,7 +29,10 @@ pub async fn create_instance_security_group(
         .ec2
         .create_security_group()
         .group_name(&sg_name)
-        .description(format!("Security group for ec2-cli instance {}", instance_name))
+        .description(format!(
+            "Security group for ec2-cli instance {}",
+            instance_name
+        ))
         .vpc_id(vpc_id)
         .tag_specifications(
             aws_sdk_ec2::types::TagSpecification::builder()
@@ -76,9 +78,7 @@ pub async fn launch_instance(
     user_data: &str,
 ) -> Result<String> {
     // Load custom tags from settings
-    let custom_tags = Settings::load()
-        .map(|s| s.tags)
-        .unwrap_or_default();
+    let custom_tags = Settings::load().map(|s| s.tags).unwrap_or_default();
 
     // Look up AMI
     let ami_id = lookup_ami(clients, profile).await?;
@@ -184,7 +184,10 @@ pub async fn lookup_ami(clients: &AwsClients, profile: &Profile) -> Result<Strin
         ),
         "ubuntu-24.04" => (
             "099720109477", // Canonical
-            format!("ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-{}-server-*", arch),
+            format!(
+                "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-{}-server-*",
+                arch
+            ),
         ),
         other => {
             return Err(Ec2CliError::ProfileValidation(format!(
@@ -198,18 +201,8 @@ pub async fn lookup_ami(clients: &AwsClients, profile: &Profile) -> Result<Strin
         .ec2
         .describe_images()
         .owners(owner)
-        .filters(
-            Filter::builder()
-                .name("name")
-                .values(&name_pattern)
-                .build(),
-        )
-        .filters(
-            Filter::builder()
-                .name("state")
-                .values("available")
-                .build(),
-        )
+        .filters(Filter::builder().name("name").values(&name_pattern).build())
+        .filters(Filter::builder().name("state").values("available").build())
         .send()
         .await
         .map_err(Ec2CliError::ec2)?;
@@ -299,9 +292,7 @@ pub async fn wait_for_ssm_ready(
             .map_err(Ec2CliError::ssm)?;
 
         if let Some(instance_info) = info.instance_information_list().first() {
-            if instance_info.ping_status()
-                == Some(&aws_sdk_ssm::types::PingStatus::Online)
-            {
+            if instance_info.ping_status() == Some(&aws_sdk_ssm::types::PingStatus::Online) {
                 return Ok(());
             }
         }

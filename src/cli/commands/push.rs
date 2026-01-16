@@ -14,9 +14,7 @@ fn get_current_branch() -> Result<String> {
         .map_err(|e| Ec2CliError::Git(e.to_string()))?;
 
     if !output.status.success() {
-        return Err(Ec2CliError::Git(
-            "Failed to get current branch".to_string(),
-        ));
+        return Err(Ec2CliError::Git("Failed to get current branch".to_string()));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -32,8 +30,8 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
     let name = resolve_instance_name(Some(&name))?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
     let username = &instance_state.username;
 

@@ -350,7 +350,7 @@ EXAMPLES
 SEE ALSO
     AWS CLI: https://aws.amazon.com/cli/
     Session Manager: https://docs.aws.amazon.com/systems-manager/
-    Source code: https://github.com/your-org/ec2-cli
+    Source code: https://github.com/LeMikaelF/ec2-cli
 
 VERSION
     ec2-cli 0.1.0

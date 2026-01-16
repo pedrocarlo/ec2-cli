@@ -9,14 +9,17 @@ pub async fn execute(name: Option<String>) -> Result<()> {
     let name = resolve_instance_name(name.as_deref())?;
 
     // Get instance from state
-    let instance_state = get_instance(&name)?
-        .ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
+    let instance_state =
+        get_instance(&name)?.ok_or_else(|| Ec2CliError::InstanceNotFound(name.clone()))?;
 
     println!("Instance: {}", name);
     println!("  Instance ID: {}", instance_state.instance_id);
     println!("  Profile: {}", instance_state.profile);
     println!("  Region: {}", instance_state.region);
-    println!("  Created: {}", instance_state.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!(
+        "  Created: {}",
+        instance_state.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+    );
 
     // Get live status from AWS
     let spinner = create_spinner("Fetching instance status...");

@@ -101,7 +101,10 @@ pub async fn init() -> Result<()> {
     let spinner = create_spinner("Connecting to AWS...");
     let clients = AwsClients::with_region(&region).await.map_err(|e| {
         spinner.finish_and_clear();
-        Ec2CliError::Config(format!("Failed to connect to AWS in region '{}': {}", region, e))
+        Ec2CliError::Config(format!(
+            "Failed to connect to AWS in region '{}': {}",
+            region, e
+        ))
     })?;
     spinner.finish_and_clear();
 
@@ -156,9 +159,7 @@ pub async fn init() -> Result<()> {
         .map(|s| {
             format!(
                 "{} ({}, {})",
-                s.subnet_id,
-                s.availability_zone,
-                s.cidr_block
+                s.subnet_id, s.availability_zone, s.cidr_block
             )
         })
         .collect();
@@ -261,10 +262,7 @@ pub fn show() -> Result<()> {
     println!("AWS settings:");
     println!(
         "  Region: {}",
-        settings
-            .region
-            .as_deref()
-            .unwrap_or("(from AWS config)")
+        settings.region.as_deref().unwrap_or("(from AWS config)")
     );
     println!(
         "  VPC: {}",
@@ -382,7 +380,9 @@ fn check_aws_cli() -> Result<String> {
             .collect::<String>();
         Ok(version)
     } else {
-        Err(Ec2CliError::Prerequisites("AWS CLI not working".to_string()))
+        Err(Ec2CliError::Prerequisites(
+            "AWS CLI not working".to_string(),
+        ))
     }
 }
 

@@ -234,7 +234,11 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Up { profile, name, link } => {
+        Commands::Up {
+            profile,
+            name,
+            link,
+        } => {
             cli::commands::up::execute(profile, name, link).await?;
             maybe_show_manual_hint();
             Ok(())
@@ -307,24 +311,30 @@ async fn main() -> anyhow::Result<()> {
                 if !profile.instance.fallback_types.is_empty() {
                     println!("  Fallback types: {:?}", profile.instance.fallback_types);
                 }
-                println!("  AMI: {} ({})", profile.instance.ami.ami_type, profile.instance.ami.architecture);
+                println!(
+                    "  AMI: {} ({})",
+                    profile.instance.ami.ami_type, profile.instance.ami.architecture
+                );
                 if let Some(ref ami_id) = profile.instance.ami.id {
                     println!("  AMI ID: {}", ami_id);
                 }
                 println!();
                 println!("Storage:");
-                println!("  Root volume: {} GB ({})",
+                println!(
+                    "  Root volume: {} GB ({})",
                     profile.instance.storage.root_volume.size_gb,
-                    profile.instance.storage.root_volume.volume_type);
+                    profile.instance.storage.root_volume.volume_type
+                );
                 println!();
                 println!("Packages:");
                 if !profile.packages.system.is_empty() {
                     println!("  System: {:?}", profile.packages.system);
                 }
                 if profile.packages.rust.enabled {
-                    println!("  Rust: {} ({:?})",
-                        profile.packages.rust.channel,
-                        profile.packages.rust.components);
+                    println!(
+                        "  Rust: {} ({:?})",
+                        profile.packages.rust.channel, profile.packages.rust.components
+                    );
                 }
                 if !profile.packages.cargo.is_empty() {
                     println!("  Cargo: {:?}", profile.packages.cargo);

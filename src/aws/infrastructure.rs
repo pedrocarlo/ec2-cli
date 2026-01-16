@@ -1,7 +1,10 @@
 use crate::config::Settings;
 use crate::{Ec2CliError, Result};
 
-use super::client::{get_default_vpc, AwsClients, DEPLOYMENT_TAG_KEY, DEPLOYMENT_TAG_VALUE, MANAGED_TAG_KEY, MANAGED_TAG_VALUE};
+use super::client::{
+    get_default_vpc, AwsClients, DEPLOYMENT_TAG_KEY, DEPLOYMENT_TAG_VALUE, MANAGED_TAG_KEY,
+    MANAGED_TAG_VALUE,
+};
 
 /// Infrastructure resources for ec2-cli
 #[derive(Debug, Clone)]
@@ -25,9 +28,7 @@ impl Infrastructure {
         };
 
         // Get subnet ID from settings (required)
-        let subnet_id = settings
-            .subnet_id
-            .ok_or(Ec2CliError::SubnetNotConfigured)?;
+        let subnet_id = settings.subnet_id.ok_or(Ec2CliError::SubnetNotConfigured)?;
 
         // Validate subnet exists and is in the VPC
         validate_subnet(clients, &subnet_id, &vpc_id).await?;

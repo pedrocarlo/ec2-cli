@@ -60,7 +60,10 @@ pub fn validate_project_name(name: &str) -> Result<()> {
             "Project name cannot exceed 64 characters".to_string(),
         ));
     }
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
         return Err(Ec2CliError::ProfileValidation(format!(
             "Invalid project name: '{}'. Only alphanumeric, dash, underscore, and dot allowed.",
             name
@@ -83,13 +86,21 @@ fn validate_username(username: &str) -> Result<()> {
         ));
     }
     // Unix usernames: alphanumeric, underscore, dash, must start with letter or underscore
-    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         return Err(Ec2CliError::ProfileValidation(format!(
             "Invalid username: '{}'. Only alphanumeric, underscore, and dash allowed.",
             username
         )));
     }
-    if username.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+    if username
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
         return Err(Ec2CliError::ProfileValidation(format!(
             "Username '{}' cannot start with a digit",
             username
@@ -124,7 +135,10 @@ fn validate_git_config_value(value: &str, context: &str) -> Result<()> {
             context, GIT_CONFIG_MAX_LENGTH
         )));
     }
-    if value.chars().any(|c| GIT_CONFIG_DANGEROUS_CHARS.contains(&c)) {
+    if value
+        .chars()
+        .any(|c| GIT_CONFIG_DANGEROUS_CHARS.contains(&c))
+    {
         return Err(Ec2CliError::ProfileValidation(format!(
             "Invalid characters in {}: '{}'. Shell metacharacters are not allowed.",
             context, value
@@ -323,7 +337,10 @@ READMEEOF
 "#,
             username, name, name
         ));
-        script.push_str(&format!("chown {}:{} /home/{}/README.md\n\n", username, username, username));
+        script.push_str(&format!(
+            "chown {}:{} /home/{}/README.md\n\n",
+            username, username, username
+        ));
 
         // Configure MOTD to show system info + README on login instead of default AWS messages
         script.push_str("echo 'Configuring login message...'\n");
@@ -352,8 +369,12 @@ MOTDEOF
     script.push_str("echo 'Ensuring SSM agent is running...'\n");
     script.push_str("if snap list amazon-ssm-agent 2>/dev/null; then\n");
     script.push_str("    snap start amazon-ssm-agent 2>/dev/null || true\n");
-    script.push_str("    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n");
-    script.push_str("    systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n");
+    script.push_str(
+        "    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n",
+    );
+    script.push_str(
+        "    systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n",
+    );
     script.push_str("else\n");
     script.push_str("    # Fallback to deb-based agent\n");
     script.push_str("    systemctl enable amazon-ssm-agent 2>/dev/null || true\n");
@@ -387,7 +408,8 @@ MOTDEOF
 
         script.push_str("echo 'Installing Rust...'\n");
         script.push_str(&format!("su - {} -c '\n", username));
-        script.push_str("curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y");
+        script
+            .push_str("curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y");
 
         // Add channel if not stable (channel is already validated by profile.validate())
         if profile.packages.rust.channel != "stable" {
@@ -498,8 +520,7 @@ mod tests {
     #[test]
     fn test_generate_with_ubuntu_user() {
         let profile = Profile::default_profile();
-        let script =
-            generate_user_data(&profile, Some("myproject"), "ubuntu", None, None).unwrap();
+        let script = generate_user_data(&profile, Some("myproject"), "ubuntu", None, None).unwrap();
 
         assert!(script.contains("su - ubuntu"));
         assert!(script.contains("/home/ubuntu/"));
@@ -511,8 +532,14 @@ mod tests {
         let profile = Profile::default_profile();
         // Use a realistic key length (at least 50 chars base64)
         let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
-        let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key), None).unwrap();
+        let script = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            Some(ssh_key),
+            None,
+        )
+        .unwrap();
 
         assert!(script.contains("mkdir -p /home/ubuntu/.ssh"));
         assert!(script.contains("authorized_keys"));
@@ -537,8 +564,14 @@ mod tests {
         // not after package installation (which can take minutes)
         let profile = Profile::default_profile();
         let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
-        let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key), None).unwrap();
+        let script = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            Some(ssh_key),
+            None,
+        )
+        .unwrap();
 
         let ssh_config_pos = script
             .find("Configuring SSH public key")
@@ -559,12 +592,8 @@ mod tests {
         let script =
             generate_user_data(&profile, Some("test-project"), "ubuntu", None, None).unwrap();
 
-        let repo_setup_pos = script
-            .find("git init --bare")
-            .expect("git init not found");
-        let marker_pos = script
-            .find(".ec2-cli-git-ready")
-            .expect("marker not found");
+        let repo_setup_pos = script.find("git init --bare").expect("git init not found");
+        let marker_pos = script.find(".ec2-cli-git-ready").expect("marker not found");
 
         assert!(
             marker_pos > repo_setup_pos,
@@ -610,8 +639,14 @@ mod tests {
             name: Some("John Doe".to_string()),
             email: Some("john@example.com".to_string()),
         };
-        let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+        let script = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            None,
+            Some(&git_config),
+        )
+        .unwrap();
 
         assert!(script.contains("Configuring git user identity"));
         assert!(script.contains("git config --global user.name \"John Doe\""));
@@ -625,8 +660,14 @@ mod tests {
             name: Some("John Doe".to_string()),
             email: None,
         };
-        let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+        let script = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            None,
+            Some(&git_config),
+        )
+        .unwrap();
 
         assert!(script.contains("git config --global user.name \"John Doe\""));
         assert!(!script.contains("git config --global user.email"));
@@ -639,8 +680,14 @@ mod tests {
             name: None,
             email: Some("john@example.com".to_string()),
         };
-        let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+        let script = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            None,
+            Some(&git_config),
+        )
+        .unwrap();
 
         assert!(!script.contains("git config --global user.name"));
         assert!(script.contains("git config --global user.email \"john@example.com\""));
@@ -662,8 +709,13 @@ mod tests {
             name: Some("John; rm -rf /".to_string()),
             email: None,
         };
-        let result =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config));
+        let result = generate_user_data(
+            &profile,
+            Some("test-project"),
+            "ubuntu",
+            None,
+            Some(&git_config),
+        );
 
         assert!(result.is_err());
     }
@@ -698,7 +750,9 @@ mod tests {
     #[test]
     fn test_shell_injection_in_env_vars() {
         let mut profile = Profile::default_profile();
-        profile.environment.insert("MALICIOUS".to_string(), "$(cat /etc/passwd)".to_string());
+        profile
+            .environment
+            .insert("MALICIOUS".to_string(), "$(cat /etc/passwd)".to_string());
 
         let result = generate_user_data(&profile, None, "ubuntu", None, None);
         assert!(result.is_err());

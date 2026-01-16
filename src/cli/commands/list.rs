@@ -11,7 +11,10 @@ pub fn execute(_all: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<20} {:<15} {:<20}", "NAME", "INSTANCE ID", "REGION", "CREATED");
+    println!(
+        "{:<20} {:<20} {:<15} {:<20}",
+        "NAME", "INSTANCE ID", "REGION", "CREATED"
+    );
     println!("{}", "-".repeat(75));
 
     for (name, state) in &instances {

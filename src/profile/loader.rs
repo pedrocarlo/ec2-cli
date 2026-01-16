@@ -17,7 +17,10 @@ fn validate_profile_name(name: &str) -> Result<()> {
             name
         )));
     }
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(Ec2CliError::ProfileInvalid(format!(
             "Invalid profile name '{}': only alphanumeric, dash, and underscore allowed",
             name
@@ -35,8 +38,8 @@ pub struct ProfileLoader {
 
 impl ProfileLoader {
     pub fn new() -> Self {
-        let global_dir = ProjectDirs::from("", "", "ec2-cli")
-            .map(|dirs| dirs.config_dir().join("profiles"));
+        let global_dir =
+            ProjectDirs::from("", "", "ec2-cli").map(|dirs| dirs.config_dir().join("profiles"));
 
         let local_dir = std::env::current_dir()
             .ok()
@@ -85,7 +88,11 @@ impl ProfileLoader {
             if path.exists() {
                 let content = std::fs::read_to_string(&path)?;
                 let profile: Profile = json5::from_str(&content).map_err(|e| {
-                    Ec2CliError::ProfileInvalid(format!("Failed to parse {}: {}", path.display(), e))
+                    Ec2CliError::ProfileInvalid(format!(
+                        "Failed to parse {}: {}",
+                        path.display(),
+                        e
+                    ))
                 })?;
                 return Ok(Some(profile));
             }

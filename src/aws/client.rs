@@ -60,9 +60,7 @@ impl AwsClients {
     /// Create new AWS clients from default configuration (ignoring settings)
     /// Used during config init to get the AWS default region
     pub async fn new_without_settings() -> Result<Self> {
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .load()
-            .await;
+        let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
 
         let region = config
             .region()
@@ -144,7 +142,10 @@ pub const DEPLOYMENT_TAG_KEY: &str = "deployment";
 pub const DEPLOYMENT_TAG_VALUE: &str = "ec2-cli";
 
 /// Create standard tags for a resource, including custom tags from settings
-pub fn create_tags(name: &str, custom_tags: &std::collections::HashMap<String, String>) -> Vec<aws_sdk_ec2::types::Tag> {
+pub fn create_tags(
+    name: &str,
+    custom_tags: &std::collections::HashMap<String, String>,
+) -> Vec<aws_sdk_ec2::types::Tag> {
     let mut tags = vec![
         aws_sdk_ec2::types::Tag::builder()
             .key(MANAGED_TAG_KEY)
@@ -182,12 +183,7 @@ pub async fn get_default_vpc(clients: &AwsClients) -> Result<String> {
     let vpcs = clients
         .ec2
         .describe_vpcs()
-        .filters(
-            Filter::builder()
-                .name("is-default")
-                .values("true")
-                .build(),
-        )
+        .filters(Filter::builder().name("is-default").values("true").build())
         .send()
         .await
         .map_err(Ec2CliError::ec2)?;
