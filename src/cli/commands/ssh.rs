@@ -20,6 +20,12 @@ pub fn execute(name: String, command: Option<String>) -> Result<()> {
     );
 
     let mut cmd = Command::new("ssh");
+
+    // Add identity file if we have the SSH key path stored
+    if let Some(ref key_path) = instance_state.ssh_key_path {
+        cmd.arg("-i").arg(key_path);
+    }
+
     cmd.arg("-o")
         .arg(format!("ProxyCommand={}", PROXY_COMMAND))
         .arg("-o")

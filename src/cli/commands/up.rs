@@ -72,8 +72,8 @@ pub async fn execute(
     }
 
     // Load SSH public key (required for SSH access)
-    let ssh_public_key = match find_ssh_public_key() {
-        Ok(key) => key,
+    let ssh_key_info = match find_ssh_public_key() {
+        Ok(info) => info,
         Err(Ec2CliError::SshKeyNotFound(paths)) => {
             eprintln!("Error: No SSH public key found. Checked:");
             for path in paths.split(", ") {
@@ -91,7 +91,7 @@ pub async fn execute(
         &profile,
         project_name.as_deref(),
         username,
-        Some(&ssh_public_key),
+        Some(&ssh_key_info.public_key),
     )?;
 
     // Launch instance (cleanup security group on failure)
@@ -128,7 +128,8 @@ pub async fn execute(
     wait_for_ssm_ready(&clients, &instance_id, 600).await?;
     spinner.finish_with_message("SSM agent ready");
 
-    // Save state with username and security group ID
+    // Save state with username, security group ID, and SSH key path
+    let ssh_key_path_str = ssh_key_info.private_key_path.to_string_lossy();
     crate::state::save_instance(
         &name,
         &instance_id,
@@ -136,6 +137,7 @@ pub async fn execute(
         &clients.region,
         username,
         &security_group_id,
+        Some(&ssh_key_path_str),
     )?;
 
     // Create link file if requested

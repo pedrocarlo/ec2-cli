@@ -70,14 +70,15 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
         None => get_current_branch()?,
     };
 
-    // Push to remote with SSM SSH command
+    // Push to remote with SSM SSH command (include identity file if available)
     // Always set upstream - it's idempotent and ensures the branch is tracked
+    let ssh_cmd = ssm_ssh_command(instance_state.ssh_key_path.as_deref());
     println!("Pushing to {}...", remote_name);
     git_push(
         &remote_name,
         Some(&branch_to_push),
         true, // always set upstream
-        Some(ssm_ssh_command()),
+        Some(&ssh_cmd),
     )?;
 
     println!("Push complete!");

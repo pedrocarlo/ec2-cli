@@ -3,6 +3,10 @@ use std::process::{Command, Stdio};
 use crate::{Ec2CliError, Result};
 
 /// Push to a remote via git subprocess
+///
+/// Uses explicit refspec format (`branch:branch`) to bypass `push.default=simple`
+/// upstream check, which would otherwise fail when the local branch has no
+/// tracking branch configured.
 pub fn git_push(
     remote: &str,
     branch: Option<&str>,
@@ -13,13 +17,15 @@ pub fn git_push(
     cmd.arg("push");
 
     if set_upstream {
-        cmd.arg("--set-upstream");
+        cmd.arg("-u");
     }
 
     cmd.arg(remote);
 
+    // Use explicit refspec format to avoid "no upstream branch" errors
+    // when push.default=simple is set
     if let Some(b) = branch {
-        cmd.arg(b);
+        cmd.arg(format!("{}:{}", b, b));
     }
 
     if let Some(ssh_cmd) = ssh_command {

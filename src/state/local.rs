@@ -29,6 +29,9 @@ pub struct InstanceState {
     /// Security group ID for cleanup on termination
     #[serde(default)]
     pub security_group_id: Option<String>,
+    /// Path to the SSH private key used for this instance
+    #[serde(default)]
+    pub ssh_key_path: Option<String>,
 }
 
 fn default_username() -> String {
@@ -92,6 +95,7 @@ impl State {
         region: &str,
         username: &str,
         security_group_id: &str,
+        ssh_key_path: Option<&str>,
     ) {
         self.instances.insert(
             name.to_string(),
@@ -102,6 +106,7 @@ impl State {
                 created_at: Utc::now(),
                 username: username.to_string(),
                 security_group_id: Some(security_group_id.to_string()),
+                ssh_key_path: ssh_key_path.map(String::from),
             },
         );
     }
@@ -143,9 +148,10 @@ pub fn save_instance(
     region: &str,
     username: &str,
     security_group_id: &str,
+    ssh_key_path: Option<&str>,
 ) -> Result<()> {
     let mut state = State::load()?;
-    state.add_instance(name, instance_id, profile, region, username, security_group_id);
+    state.add_instance(name, instance_id, profile, region, username, security_group_id, ssh_key_path);
     state.save()
 }
 
@@ -217,12 +223,16 @@ mod tests {
     fn test_state_operations() {
         let mut state = State::default();
 
-        state.add_instance("test-instance", "i-123456", "default", "us-west-2", "ubuntu", "sg-12345678");
+        state.add_instance("test-instance", "i-123456", "default", "us-west-2", "ubuntu", "sg-12345678", Some("/home/user/.ssh/id_ed25519"));
         assert!(state.get_instance("test-instance").is_some());
         assert_eq!(state.get_instance("test-instance").unwrap().username, "ubuntu");
         assert_eq!(
             state.get_instance("test-instance").unwrap().security_group_id,
             Some("sg-12345678".to_string())
+        );
+        assert_eq!(
+            state.get_instance("test-instance").unwrap().ssh_key_path,
+            Some("/home/user/.ssh/id_ed25519".to_string())
         );
 
         let removed = state.remove_instance("test-instance");
@@ -234,8 +244,9 @@ mod tests {
     fn test_state_with_ubuntu_user() {
         let mut state = State::default();
 
-        state.add_instance("ubuntu-instance", "i-789", "ubuntu-profile", "us-east-1", "ubuntu", "sg-abc");
+        state.add_instance("ubuntu-instance", "i-789", "ubuntu-profile", "us-east-1", "ubuntu", "sg-abc", None);
         let instance = state.get_instance("ubuntu-instance").unwrap();
         assert_eq!(instance.username, "ubuntu");
+        assert_eq!(instance.ssh_key_path, None);
     }
 }

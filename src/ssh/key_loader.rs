@@ -5,6 +5,15 @@ use crate::{Ec2CliError, Result};
 /// Standard SSH key filenames to check in ~/.ssh/
 const STANDARD_KEY_NAMES: &[&str] = &["id_ed25519", "id_rsa", "id_ecdsa"];
 
+/// Information about an SSH key pair
+#[derive(Debug, Clone)]
+pub struct SshKeyInfo {
+    /// The public key content (for injection into authorized_keys)
+    pub public_key: String,
+    /// Path to the private key file (for -i flag in SSH commands)
+    pub private_key_path: PathBuf,
+}
+
 /// Find and load the user's SSH public key.
 ///
 /// Checks locations in this order:
@@ -12,14 +21,24 @@ const STANDARD_KEY_NAMES: &[&str] = &["id_ed25519", "id_rsa", "id_ecdsa"];
 /// 2. `~/.ssh/id_ed25519.pub` (modern default)
 /// 3. `~/.ssh/id_rsa.pub` (legacy but common)
 /// 4. `~/.ssh/id_ecdsa.pub` (ECDSA keys)
-pub fn find_ssh_public_key() -> Result<String> {
+///
+/// Returns both the public key content and the path to the private key.
+pub fn find_ssh_public_key() -> Result<SshKeyInfo> {
     let mut checked_paths = Vec::new();
 
     // 1. Check .ec2-cli/ssh_public_key in current directory
     if let Ok(cwd) = std::env::current_dir() {
         let local_key_path = cwd.join(".ec2-cli").join("ssh_public_key");
         match try_load_key(&local_key_path) {
-            Ok(key) => return Ok(key),
+            Ok(key) => {
+                // For project-local keys, derive private key path by removing .pub
+                // or use the same path if it doesn't end in .pub (user provides private key path separately)
+                let private_key_path = derive_private_key_path(&local_key_path);
+                return Ok(SshKeyInfo {
+                    public_key: key,
+                    private_key_path,
+                });
+            }
             Err(LoadKeyError::NotFound) => {
                 checked_paths.push(local_key_path.display().to_string());
             }
@@ -39,11 +58,18 @@ pub fn find_ssh_public_key() -> Result<String> {
     // 2. Check standard SSH key locations in ~/.ssh/
     if let Some(home) = home_dir() {
         for key_name in STANDARD_KEY_NAMES {
-            let path = home.join(".ssh").join(format!("{}.pub", key_name));
-            match try_load_key(&path) {
-                Ok(key) => return Ok(key),
+            let pub_path = home.join(".ssh").join(format!("{}.pub", key_name));
+            match try_load_key(&pub_path) {
+                Ok(key) => {
+                    // Private key is the same path without .pub extension
+                    let private_key_path = home.join(".ssh").join(*key_name);
+                    return Ok(SshKeyInfo {
+                        public_key: key,
+                        private_key_path,
+                    });
+                }
                 Err(LoadKeyError::NotFound) => {
-                    checked_paths.push(path.display().to_string());
+                    checked_paths.push(pub_path.display().to_string());
                 }
                 Err(LoadKeyError::ReadError(path, e)) => {
                     return Err(Ec2CliError::SshKeyInvalid(format!(
@@ -60,6 +86,30 @@ pub fn find_ssh_public_key() -> Result<String> {
     }
 
     Err(Ec2CliError::SshKeyNotFound(checked_paths.join(", ")))
+}
+
+/// Derive the private key path from a public key path.
+/// If the path ends in .pub, strip it. Otherwise, assume a separate private key config.
+fn derive_private_key_path(pub_key_path: &std::path::Path) -> PathBuf {
+    let path_str = pub_key_path.to_string_lossy();
+    if let Some(stripped) = path_str.strip_suffix(".pub") {
+        PathBuf::from(stripped)
+    } else {
+        // For project-local keys without .pub extension, check for common private key locations
+        // First try the same directory with common private key names
+        if let Some(parent) = pub_key_path.parent() {
+            for key_name in STANDARD_KEY_NAMES {
+                let candidate = parent.join(key_name);
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+        // Fall back to default ssh key
+        home_dir()
+            .map(|h| h.join(".ssh").join("id_ed25519"))
+            .unwrap_or_else(|| PathBuf::from("~/.ssh/id_ed25519"))
+    }
 }
 
 /// Internal error type for key loading

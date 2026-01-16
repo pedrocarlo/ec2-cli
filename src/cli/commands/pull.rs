@@ -44,9 +44,10 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
         add_remote(&remote_name, &remote_url)?;
     }
 
-    // Pull from remote with SSM SSH command
+    // Pull from remote with SSM SSH command (include identity file if available)
+    let ssh_cmd = ssm_ssh_command(instance_state.ssh_key_path.as_deref());
     println!("Pulling from {}...", remote_name);
-    git_pull(&remote_name, branch.as_deref(), Some(ssm_ssh_command()))?;
+    git_pull(&remote_name, branch.as_deref(), Some(&ssh_cmd))?;
 
     println!("Pull complete!");
     Ok(())
