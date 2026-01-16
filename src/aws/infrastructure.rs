@@ -78,14 +78,22 @@ async fn get_or_create_iam_resources(clients: &AwsClients) -> Result<(String, St
     let profile_name = "ec2-cli-instance-profile";
 
     // Check if role already exists
-    let existing_role = clients
-        .iam
-        .get_role()
-        .role_name(role_name)
-        .send()
-        .await;
+    let role_exists = match clients.iam.get_role().role_name(role_name).send().await {
+        Ok(_) => true,
+        Err(e) => {
+            // Check if it's a "role not found" error vs other IAM errors
+            let is_not_found = e
+                .as_service_error()
+                .map(|se| se.is_no_such_entity_exception())
+                .unwrap_or(false);
+            if !is_not_found {
+                return Err(Ec2CliError::iam(e));
+            }
+            false
+        }
+    };
 
-    if existing_role.is_err() {
+    if !role_exists {
         println!("  Creating IAM role and instance profile...");
 
         // Create the role
@@ -119,57 +127,67 @@ async fn get_or_create_iam_resources(clients: &AwsClients) -> Result<(String, St
             .await
             .map_err(Ec2CliError::iam)?;
 
-        // Use minimal inline policy for SSM instead of the broader managed policy
-        // This restricts permissions to only what's needed for SSM Session Manager
-        let ssm_policy = r#"{
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "ssm:UpdateInstanceInformation",
-                        "ssmmessages:CreateControlChannel",
-                        "ssmmessages:CreateDataChannel",
-                        "ssmmessages:OpenControlChannel",
-                        "ssmmessages:OpenDataChannel",
-                        "ec2messages:AcknowledgeMessage",
-                        "ec2messages:DeleteMessage",
-                        "ec2messages:FailMessage",
-                        "ec2messages:GetEndpoint",
-                        "ec2messages:GetMessages",
-                        "ec2messages:SendReply"
-                    ],
-                    "Resource": "*"
-                }
-            ]
-        }"#;
-
+        // Attach AWS managed policy for SSM Session Manager
+        // This includes all required permissions for SSM agent to work properly
         clients
             .iam
-            .put_role_policy()
+            .attach_role_policy()
             .role_name(role_name)
-            .policy_name("ec2-cli-ssm-policy")
-            .policy_document(ssm_policy)
+            .policy_arn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
             .send()
             .await
             .map_err(Ec2CliError::iam)?;
+    } else {
+        // Role exists - ensure managed policy is attached (migration from old inline policy)
+        ensure_managed_policy_attached(clients, role_name).await?;
     }
 
     // Check if instance profile exists
-    let existing_profile = clients
+    let existing_profile = match clients
         .iam
         .get_instance_profile()
         .instance_profile_name(profile_name)
         .send()
-        .await;
+        .await
+    {
+        Ok(p) => Some(p),
+        Err(e) => {
+            // Check if it's a "not found" error vs other IAM errors
+            let is_not_found = e
+                .as_service_error()
+                .map(|se| se.is_no_such_entity_exception())
+                .unwrap_or(false);
+            if !is_not_found {
+                return Err(Ec2CliError::iam(e));
+            }
+            None
+        }
+    };
 
     let profile_arn = match existing_profile {
-        Ok(p) => p
-            .instance_profile()
-            .ok_or_else(|| Ec2CliError::Iam("No instance profile in response".to_string()))?
-            .arn()
-            .to_string(),
-        Err(_) => {
+        Some(p) => {
+            let profile = p
+                .instance_profile()
+                .ok_or_else(|| Ec2CliError::Iam("No instance profile in response".to_string()))?;
+
+            // Verify role is attached to existing profile (handles partial creation failures)
+            if profile.roles().is_empty() {
+                clients
+                    .iam
+                    .add_role_to_instance_profile()
+                    .instance_profile_name(profile_name)
+                    .role_name(role_name)
+                    .send()
+                    .await
+                    .map_err(Ec2CliError::iam)?;
+
+                // Wait for propagation
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
+
+            profile.arn().to_string()
+        }
+        None => {
             // Create instance profile
             let profile = clients
                 .iam
@@ -208,4 +226,49 @@ async fn get_or_create_iam_resources(clients: &AwsClients) -> Result<(String, St
     };
 
     Ok((profile_arn, profile_name.to_string()))
+}
+
+const SSM_MANAGED_POLICY_ARN: &str = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore";
+
+/// Ensure the managed SSM policy is attached to an existing role
+/// This handles migration from the old inline policy to the managed policy
+async fn ensure_managed_policy_attached(clients: &AwsClients, role_name: &str) -> Result<()> {
+    // Check if managed policy is already attached
+    let attached_policies = clients
+        .iam
+        .list_attached_role_policies()
+        .role_name(role_name)
+        .send()
+        .await
+        .map_err(Ec2CliError::iam)?;
+
+    let has_managed_policy = attached_policies
+        .attached_policies()
+        .iter()
+        .any(|p| p.policy_arn() == Some(SSM_MANAGED_POLICY_ARN));
+
+    if !has_managed_policy {
+        println!("  Upgrading IAM role to use managed SSM policy...");
+
+        // Attach managed policy
+        clients
+            .iam
+            .attach_role_policy()
+            .role_name(role_name)
+            .policy_arn(SSM_MANAGED_POLICY_ARN)
+            .send()
+            .await
+            .map_err(Ec2CliError::iam)?;
+
+        // Delete old inline policy if it exists (ignore errors - may not exist)
+        let _ = clients
+            .iam
+            .delete_role_policy()
+            .role_name(role_name)
+            .policy_name("ec2-cli-ssm-policy")
+            .send()
+            .await;
+    }
+
+    Ok(())
 }

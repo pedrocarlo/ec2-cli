@@ -74,8 +74,34 @@ pub fn validate_project_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a Unix username is safe to use in shell commands
+fn validate_username(username: &str) -> Result<()> {
+    if username.is_empty() {
+        return Err(Ec2CliError::ProfileValidation(
+            "Username cannot be empty".to_string(),
+        ));
+    }
+    // Unix usernames: alphanumeric, underscore, dash, must start with letter or underscore
+    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(Ec2CliError::ProfileValidation(format!(
+            "Invalid username: '{}'. Only alphanumeric, underscore, and dash allowed.",
+            username
+        )));
+    }
+    if username.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        return Err(Ec2CliError::ProfileValidation(format!(
+            "Username '{}' cannot start with a digit",
+            username
+        )));
+    }
+    Ok(())
+}
+
 /// Generate cloud-init user data script from profile
 pub fn generate_user_data(profile: &Profile, project_name: Option<&str>, username: &str) -> Result<String> {
+    // Validate username before using in shell commands
+    validate_username(username)?;
+
     let mut script = String::from("#!/bin/bash\nset -ex\n\n");
 
     // Log to file for debugging
@@ -84,6 +110,19 @@ pub fn generate_user_data(profile: &Profile, project_name: Option<&str>, usernam
     // Wait for cloud-init to complete basic setup
     script.push_str("echo 'Waiting for cloud-init...'\n");
     script.push_str("cloud-init status --wait || true\n\n");
+
+    // Ensure SSM agent is running (pre-installed on Ubuntu 18.04+ AMIs)
+    // Handle both snap-based (Ubuntu 18.04+) and deb-based (older/custom AMIs) installations
+    script.push_str("echo 'Ensuring SSM agent is running...'\n");
+    script.push_str("if snap list amazon-ssm-agent 2>/dev/null; then\n");
+    script.push_str("    snap start amazon-ssm-agent 2>/dev/null || true\n");
+    script.push_str("    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n");
+    script.push_str("    systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || true\n");
+    script.push_str("else\n");
+    script.push_str("    # Fallback to deb-based agent\n");
+    script.push_str("    systemctl enable amazon-ssm-agent 2>/dev/null || true\n");
+    script.push_str("    systemctl start amazon-ssm-agent 2>/dev/null || true\n");
+    script.push_str("fi\n\n");
 
     // Validate and install system packages (Ubuntu/apt-get only)
     script.push_str("echo 'Installing system packages...'\n");
