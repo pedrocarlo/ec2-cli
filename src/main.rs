@@ -1,4 +1,8 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::engine::ArgValueCompleter;
+use clap_complete::CompleteEnv;
+
+use cli::completions::{InstanceCompleter, ProfileCompleter, ShellType};
 
 mod aws;
 mod cli;
@@ -29,7 +33,7 @@ enum Commands {
     /// Launch a new EC2 instance
     Up {
         /// Profile name to use (default if omitted)
-        #[arg(short, long)]
+        #[arg(short, long, add = ArgValueCompleter::new(ProfileCompleter))]
         profile: Option<String>,
 
         /// Custom instance name
@@ -44,6 +48,7 @@ enum Commands {
     /// Terminate instance and cleanup resources
     Destroy {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Skip confirmation prompt
@@ -54,6 +59,7 @@ enum Commands {
     /// SSH into instance via SSM Session Manager
     Ssh {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Command to execute
@@ -64,6 +70,7 @@ enum Commands {
     /// Copy files to/from EC2 instance via SSM
     Scp {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Source path (prefix with : for remote)
@@ -80,6 +87,7 @@ enum Commands {
     /// Push code to EC2 bare repo
     Push {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Branch to push
@@ -90,6 +98,7 @@ enum Commands {
     /// Pull from EC2 bare repo
     Pull {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Branch to pull
@@ -100,6 +109,7 @@ enum Commands {
     /// Show instance status
     Status {
         /// Instance name (optional if linked)
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: Option<String>,
     },
 
@@ -125,11 +135,19 @@ enum Commands {
     /// View cloud-init logs from instance
     Logs {
         /// Instance name
+        #[arg(add = ArgValueCompleter::new(InstanceCompleter))]
         name: String,
 
         /// Follow log output
         #[arg(short, long)]
         follow: bool,
+    },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: ShellType,
     },
 }
 
@@ -141,12 +159,14 @@ enum ProfileCommands {
     /// Show profile details
     Show {
         /// Profile name
+        #[arg(add = ArgValueCompleter::new(ProfileCompleter))]
         name: String,
     },
 
     /// Validate a profile
     Validate {
         /// Profile name
+        #[arg(add = ArgValueCompleter::new(ProfileCompleter))]
         name: String,
     },
 }
@@ -188,6 +208,9 @@ enum TagsCommands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Handle shell completion callbacks (when COMPLETE env var is set)
+    CompleteEnv::with_factory(Cli::command).complete();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -332,6 +355,18 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Logs { name, follow } => {
             cli::commands::logs::execute(name, follow)?;
+            Ok(())
+        }
+        Commands::Completions { shell } => {
+            use clap_complete::generate;
+            use std::io;
+
+            let shell = match shell {
+                ShellType::Bash => clap_complete::Shell::Bash,
+                ShellType::Zsh => clap_complete::Shell::Zsh,
+                ShellType::Fish => clap_complete::Shell::Fish,
+            };
+            generate(shell, &mut Cli::command(), "ec2-cli", &mut io::stdout());
             Ok(())
         }
     }
