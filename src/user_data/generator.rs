@@ -138,6 +138,50 @@ pub fn generate_user_data(
         ));
     }
 
+    // Create git repo directories and bare repo EARLY - before cloud-init wait
+    // This ensures `ec2-cli push` works as soon as SSM is ready, without waiting
+    // for the full cloud-init/package installation to complete
+    script.push_str("echo 'Setting up git directories...'\n");
+    script.push_str(&format!("mkdir -p /home/{}/repos\n", username));
+    script.push_str(&format!("mkdir -p /home/{}/work\n", username));
+    script.push_str(&format!(
+        "chown -R {}:{} /home/{}/repos /home/{}/work\n\n",
+        username, username, username, username
+    ));
+
+    // Set up git repo for the project if name provided
+    if let Some(name) = project_name {
+        // Project name is validated before calling this function
+        script.push_str(&format!("echo 'Setting up git repo for {}...'\n", name));
+        script.push_str(&format!(
+            "su - {} -c 'git init --bare /home/{}/repos/{}.git'\n",
+            username, username, name
+        ));
+
+        // Create post-receive hook
+        script.push_str(&format!(
+            r#"cat > /home/{}/repos/{}.git/hooks/post-receive << 'HOOKEOF'
+#!/bin/bash
+GIT_WORK_TREE=/home/{}/work/{} git checkout -f
+HOOKEOF
+"#,
+            username, name, username, name
+        ));
+        script.push_str(&format!(
+            "chmod +x /home/{}/repos/{}.git/hooks/post-receive\n",
+            username, name
+        ));
+        script.push_str(&format!(
+            "chown -R {}:{} /home/{}/repos/{}.git\n",
+            username, username, username, name
+        ));
+        script.push_str(&format!("mkdir -p /home/{}/work/{}\n", username, name));
+        script.push_str(&format!(
+            "chown -R {}:{} /home/{}/work/{}\n\n",
+            username, username, username, name
+        ));
+    }
+
     // Wait for cloud-init to complete basic setup
     script.push_str("echo 'Waiting for cloud-init...'\n");
     script.push_str("cloud-init status --wait || true\n\n");
@@ -231,48 +275,6 @@ pub fn generate_user_data(
             script.push_str(&format!("export {}=\"{}\"\n", key, value));
         }
         script.push_str("ENVEOF\n\n");
-    }
-
-    // Create directories for git repos
-    script.push_str("echo 'Setting up git directories...'\n");
-    script.push_str(&format!("mkdir -p /home/{}/repos\n", username));
-    script.push_str(&format!("mkdir -p /home/{}/work\n", username));
-    script.push_str(&format!("chown -R {}:{} /home/{}/repos /home/{}/work\n\n", username, username, username, username));
-
-    // Set up git repo for the project if name provided
-    if let Some(name) = project_name {
-        // Project name is validated before calling this function
-        script.push_str(&format!("echo 'Setting up git repo for {}...'\n", name));
-        script.push_str(&format!(
-            "su - {} -c 'git init --bare /home/{}/repos/{}.git'\n",
-            username, username, name
-        ));
-
-        // Create post-receive hook
-        script.push_str(&format!(
-            r#"cat > /home/{}/repos/{}.git/hooks/post-receive << 'HOOKEOF'
-#!/bin/bash
-GIT_WORK_TREE=/home/{}/work/{} git checkout -f
-HOOKEOF
-"#,
-            username, name, username, name
-        ));
-        script.push_str(&format!(
-            "chmod +x /home/{}/repos/{}.git/hooks/post-receive\n",
-            username, name
-        ));
-        script.push_str(&format!(
-            "chown -R {}:{} /home/{}/repos/{}.git\n",
-            username, username, username, name
-        ));
-        script.push_str(&format!(
-            "mkdir -p /home/{}/work/{}\n",
-            username, name
-        ));
-        script.push_str(&format!(
-            "chown -R {}:{} /home/{}/work/{}\n\n",
-            username, username, username, name
-        ));
     }
 
     // Signal completion
