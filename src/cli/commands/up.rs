@@ -1,7 +1,7 @@
 use crate::aws::client::AwsClients;
 use crate::aws::ec2::instance::{
-    create_instance_security_group, delete_security_group, launch_instance, wait_for_running,
-    wait_for_ssm_ready,
+    create_instance_security_group, delete_security_group, launch_instance, wait_for_git_ready,
+    wait_for_running, wait_for_ssm_ready,
 };
 use crate::aws::infrastructure::Infrastructure;
 use crate::config::Settings;
@@ -130,6 +130,13 @@ pub async fn execute(
 
     // Save state with username, security group ID, and SSH key path
     let ssh_key_path_str = ssh_key_info.private_key_path.to_string_lossy();
+
+    // Wait for git repo to be ready (only if project is configured)
+    if project_name.is_some() {
+        let spinner = create_spinner("Waiting for git repo setup...");
+        wait_for_git_ready(&instance_id, username, Some(&ssh_key_path_str), 60).await?;
+        spinner.finish_with_message("Git repo ready");
+    }
     crate::state::save_instance(
         &name,
         &instance_id,

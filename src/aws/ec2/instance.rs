@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::config::Settings;
 use crate::profile::Profile;
+use crate::ssh::SSM_PROXY_COMMAND;
 use crate::{Ec2CliError, Result};
 
 use super::super::client::{create_tags, AwsClients};
@@ -385,6 +386,62 @@ pub async fn wait_for_terminated(
                     "Instance {} in unexpected state during termination: {:?}",
                     instance_id, other
                 )));
+            }
+        }
+    }
+}
+
+/// Wait for the git repo marker file to exist on the instance
+/// This ensures the git bare repo is ready before returning from `up`
+pub async fn wait_for_git_ready(
+    instance_id: &str,
+    username: &str,
+    ssh_key_path: Option<&str>,
+    timeout_secs: u64,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+    let target = format!("{}@{}", username, instance_id);
+    let marker_check = format!("test -f /home/{}/.ec2-cli-git-ready", username);
+
+    loop {
+        if start.elapsed() > timeout {
+            return Err(Ec2CliError::Timeout(format!(
+                "Git repo setup did not complete within {} seconds",
+                timeout_secs
+            )));
+        }
+
+        let mut cmd = tokio::process::Command::new("ssh");
+
+        if let Some(key_path) = ssh_key_path {
+            cmd.arg("-i").arg(key_path);
+        }
+
+        cmd.arg("-o")
+            .arg(format!("ProxyCommand={}", SSM_PROXY_COMMAND))
+            .arg("-o")
+            .arg("StrictHostKeyChecking=no")
+            .arg("-o")
+            .arg("UserKnownHostsFile=/dev/null")
+            .arg("-o")
+            .arg("ConnectTimeout=5")
+            .arg("-o")
+            .arg("BatchMode=yes")
+            .arg("-o")
+            .arg("LogLevel=ERROR")
+            .arg(&target)
+            .arg(&marker_check);
+
+        // Suppress output
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
+
+        match cmd.status().await {
+            Ok(status) if status.success() => return Ok(()),
+            _ => {
+                // File doesn't exist yet or SSH failed, wait and retry
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
         }
     }

@@ -180,6 +180,9 @@ HOOKEOF
             "chown -R {}:{} /home/{}/work/{}\n\n",
             username, username, username, name
         ));
+
+        // Create marker file to signal git repo is ready
+        script.push_str(&format!("touch /home/{}/.ec2-cli-git-ready\n\n", username));
     }
 
     // Wait for cloud-init to complete basic setup
@@ -369,6 +372,25 @@ mod tests {
         assert!(
             ssh_config_pos < cloud_init_pos,
             "SSH key setup must occur before cloud-init wait to avoid race condition"
+        );
+    }
+
+    #[test]
+    fn test_git_ready_marker_created_after_repo_setup() {
+        let profile = Profile::default_profile();
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None).unwrap();
+
+        let repo_setup_pos = script
+            .find("git init --bare")
+            .expect("git init not found");
+        let marker_pos = script
+            .find(".ec2-cli-git-ready")
+            .expect("marker not found");
+
+        assert!(
+            marker_pos > repo_setup_pos,
+            "Marker file must be created after git repo setup"
         );
     }
 

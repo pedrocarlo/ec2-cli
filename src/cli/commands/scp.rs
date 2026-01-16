@@ -1,10 +1,8 @@
 use std::process::Command;
 
+use crate::ssh::SSM_PROXY_COMMAND;
 use crate::state::{get_instance, resolve_instance_name};
 use crate::{Ec2CliError, Result};
-
-const PROXY_COMMAND: &str =
-    "sh -c \"aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p\"";
 
 pub fn execute(name: String, src: String, dest: String, recursive: bool) -> Result<()> {
     // Resolve instance name
@@ -30,7 +28,7 @@ pub fn execute(name: String, src: String, dest: String, recursive: bool) -> Resu
     }
 
     cmd.arg("-o")
-        .arg(format!("ProxyCommand={}", PROXY_COMMAND))
+        .arg(format!("ProxyCommand={}", SSM_PROXY_COMMAND))
         .arg("-o")
         .arg("StrictHostKeyChecking=no")
         .arg("-o")
