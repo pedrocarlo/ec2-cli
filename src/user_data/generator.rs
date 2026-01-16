@@ -308,55 +308,55 @@ HOOKEOF
             username, username, username, name
         ));
 
-        // Create README in home directory with usage instructions
-        script.push_str(&format!(
-            r#"cat > /home/{}/README.md << 'READMEEOF'
-# ec2-cli Development Instance
-
-## Your project is at:
-    cd ~/work/{}
-
-## Git workflow
-
-Make changes, then commit normally:
-    cd ~/work/{}
-    git add .
-    git commit -m "your message"
-
-Then on your local machine, pull the changes:
-    ec2-cli pull
-
-## Logs
-
-View cloud-init logs:
-    cat /var/log/ec2-cli-init.log
-
-Check if setup is complete:
-    ls ~/.ec2-cli-ready
-READMEEOF
-"#,
-            username, name, name
-        ));
-        script.push_str(&format!(
-            "chown {}:{} /home/{}/README.md\n\n",
-            username, username, username
-        ));
-
-        // Configure MOTD to show system info + README on login instead of default AWS messages
+        // Configure MOTD to show formatted instance info on login
         script.push_str("echo 'Configuring login message...'\n");
         // Disable default Ubuntu MOTD components
         script.push_str("chmod -x /etc/update-motd.d/* 2>/dev/null || true\n");
-        // Re-enable landscape-sysinfo for system information display
-        script.push_str("chmod +x /etc/update-motd.d/50-landscape-sysinfo 2>/dev/null || true\n");
-        // Create custom MOTD script that displays the README
+        // Create custom MOTD script with box-formatted output
         script.push_str(&format!(
             r#"cat > /etc/update-motd.d/99-ec2-cli << 'MOTDEOF'
 #!/bin/bash
-echo ""
-cat /home/{}/README.md 2>/dev/null || echo "ec2-cli development instance"
+
+# Gather system info
+LOAD=$(awk '{{print $1}}' /proc/loadavg)
+MEM_TOTAL=$(grep MemTotal /proc/meminfo | awk '{{print $2}}')
+MEM_AVAIL=$(grep MemAvailable /proc/meminfo | awk '{{print $2}}')
+MEM_PCT=$((100 - (MEM_AVAIL * 100 / MEM_TOTAL)))
+DISK_PCT=$(df / | awk 'NR==2 {{gsub(/%/,""); print $5}}')
+IP_ADDR=$(hostname -I | awk '{{print $1}}')
+IFACE=$(ip route | awk '/default/ {{print $5}}' | head -1)
+
+cat << EOF
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│   ec2-cli Development Instance                                   │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   System       Load: $LOAD    Memory: $MEM_PCT%    Disk: $DISK_PCT%
+│   Network      $IP_ADDR ($IFACE)
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Your Project ~/work/{}
+│                (this is where \`ec2-cli push\` writes)             │
+│                                                                  │
+│   Workflow     1. In your repository, make changes and commit:   │
+│                   git add . && git commit -m "message"           │
+│                                                                  │
+│                2. From your local machine:                       │
+│                   ec2-cli pull                                   │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Logs         cat /var/log/ec2-cli-init.log                     │
+│   Ready?       ls ~/.ec2-cli-ready                               │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+EOF
 MOTDEOF
 "#,
-            username
+            name
         ));
         script.push_str("chmod +x /etc/update-motd.d/99-ec2-cli\n\n");
 
