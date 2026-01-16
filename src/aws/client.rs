@@ -142,6 +142,10 @@ pub const NAME_TAG_KEY: &str = "ec2-cli:name";
 /// Standard Name tag
 pub const AWS_NAME_TAG: &str = "Name";
 
+/// Hardcoded deployment identifier tag
+pub const DEPLOYMENT_TAG_KEY: &str = "deployment";
+pub const DEPLOYMENT_TAG_VALUE: &str = "ec2-cli";
+
 /// Create standard tags for a resource, including custom tags from settings
 pub fn create_tags(name: &str, custom_tags: &std::collections::HashMap<String, String>) -> Vec<aws_sdk_ec2::types::Tag> {
     let mut tags = vec![
@@ -156,6 +160,10 @@ pub fn create_tags(name: &str, custom_tags: &std::collections::HashMap<String, S
         aws_sdk_ec2::types::Tag::builder()
             .key(AWS_NAME_TAG)
             .value(format!("ec2-cli-{}", name))
+            .build(),
+        aws_sdk_ec2::types::Tag::builder()
+            .key(DEPLOYMENT_TAG_KEY)
+            .value(DEPLOYMENT_TAG_VALUE)
             .build(),
     ];
 

@@ -1,7 +1,7 @@
 use crate::config::Settings;
 use crate::{Ec2CliError, Result};
 
-use super::client::{get_default_vpc, AwsClients, MANAGED_TAG_KEY, MANAGED_TAG_VALUE};
+use super::client::{get_default_vpc, AwsClients, DEPLOYMENT_TAG_KEY, DEPLOYMENT_TAG_VALUE, MANAGED_TAG_KEY, MANAGED_TAG_VALUE};
 
 /// Infrastructure resources for ec2-cli
 #[derive(Debug, Clone)]
@@ -124,6 +124,13 @@ async fn get_or_create_iam_resources(clients: &AwsClients) -> Result<(String, St
                     .build()
                     .map_err(|e| Ec2CliError::Iam(e.to_string()))?,
             )
+            .tags(
+                aws_sdk_iam::types::Tag::builder()
+                    .key(DEPLOYMENT_TAG_KEY)
+                    .value(DEPLOYMENT_TAG_VALUE)
+                    .build()
+                    .map_err(|e| Ec2CliError::Iam(e.to_string()))?,
+            )
             .send()
             .await
             .map_err(Ec2CliError::iam)?;
@@ -198,6 +205,13 @@ async fn get_or_create_iam_resources(clients: &AwsClients) -> Result<(String, St
                     aws_sdk_iam::types::Tag::builder()
                         .key(MANAGED_TAG_KEY)
                         .value(MANAGED_TAG_VALUE)
+                        .build()
+                        .map_err(|e| Ec2CliError::Iam(e.to_string()))?,
+                )
+                .tags(
+                    aws_sdk_iam::types::Tag::builder()
+                        .key(DEPLOYMENT_TAG_KEY)
+                        .value(DEPLOYMENT_TAG_VALUE)
                         .build()
                         .map_err(|e| Ec2CliError::Iam(e.to_string()))?,
                 )
