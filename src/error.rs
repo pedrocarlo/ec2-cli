@@ -133,7 +133,12 @@ macro_rules! format_sdk_error {
     ($sdk:ident, $err:expr) => {{
         use $sdk::error::SdkError;
         match &$err {
-            SdkError::ServiceError(service_err) => format!("{:?}", service_err.err()),
+            SdkError::ServiceError(service_err) => {
+                let err = service_err.err();
+                let code = err.code().unwrap_or("Unknown");
+                let message = err.message().unwrap_or("No details available");
+                format!("{}: {}", code, message)
+            }
             SdkError::TimeoutError(_) => "Request timed out".to_string(),
             SdkError::DispatchFailure(dispatch) => {
                 if dispatch.is_io() {
@@ -158,7 +163,7 @@ impl Ec2CliError {
 
     pub fn ec2<E, R>(err: aws_sdk_ec2::error::SdkError<E, R>) -> Self
     where
-        E: std::fmt::Debug,
+        E: std::fmt::Debug + aws_smithy_types::error::metadata::ProvideErrorMetadata,
         R: std::fmt::Debug,
     {
         Ec2CliError::Ec2(format_sdk_error!(aws_sdk_ec2, err))
@@ -166,7 +171,7 @@ impl Ec2CliError {
 
     pub fn ssm<E, R>(err: aws_sdk_ssm::error::SdkError<E, R>) -> Self
     where
-        E: std::fmt::Debug,
+        E: std::fmt::Debug + aws_smithy_types::error::metadata::ProvideErrorMetadata,
         R: std::fmt::Debug,
     {
         Ec2CliError::Ssm(format_sdk_error!(aws_sdk_ssm, err))
@@ -174,7 +179,7 @@ impl Ec2CliError {
 
     pub fn iam<E, R>(err: aws_sdk_iam::error::SdkError<E, R>) -> Self
     where
-        E: std::fmt::Debug,
+        E: std::fmt::Debug + aws_smithy_types::error::metadata::ProvideErrorMetadata,
         R: std::fmt::Debug,
     {
         Ec2CliError::Iam(format_sdk_error!(aws_sdk_iam, err))

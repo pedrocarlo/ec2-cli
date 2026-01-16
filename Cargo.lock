@@ -779,6 +779,7 @@ dependencies = [
  "aws-sdk-iam",
  "aws-sdk-ssm",
  "aws-sdk-sts",
+ "aws-smithy-types",
  "base64",
  "chrono",
  "clap",
