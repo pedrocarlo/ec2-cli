@@ -213,6 +213,37 @@ HOOKEOF
             username, username, username, name
         ));
 
+        // Create README in home directory with usage instructions
+        script.push_str(&format!(
+            r#"cat > /home/{}/README.md << 'READMEEOF'
+# ec2-cli Development Instance
+
+## Your project is at:
+    cd ~/work/{}
+
+## Git workflow
+
+Make changes, then commit normally:
+    cd ~/work/{}
+    git add .
+    git commit -m "your message"
+
+Then on your local machine, pull the changes:
+    ec2-cli pull
+
+## Logs
+
+View cloud-init logs:
+    cat /var/log/ec2-cli-init.log
+
+Check if setup is complete:
+    ls ~/.ec2-cli-ready
+READMEEOF
+"#,
+            username, name, name
+        ));
+        script.push_str(&format!("chown {}:{} /home/{}/README.md\n\n", username, username, username));
+
         // Create marker file to signal git repo is ready
         script.push_str(&format!("touch /home/{}/.ec2-cli-git-ready\n\n", username));
     }
