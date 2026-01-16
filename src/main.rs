@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 mod aws;
 mod cli;
 mod error;
+mod git;
 mod profile;
 mod state;
 mod user_data;
