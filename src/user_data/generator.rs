@@ -158,11 +158,24 @@ pub fn generate_user_data(
             username, username, name
         ));
 
-        // Create post-receive hook
+        // Create post-receive hook that checks out whatever branch is pushed
+        // Handles: arbitrary branch names, skips tag pushes and branch deletions
         script.push_str(&format!(
             r#"cat > /home/{}/repos/{}.git/hooks/post-receive << 'HOOKEOF'
 #!/bin/bash
-GIT_WORK_TREE=/home/{}/work/{} git checkout -f
+while read oldrev newrev refname; do
+    # Skip branch deletions (newrev is all zeros)
+    if [ "$newrev" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+    # Only handle branch pushes, not tags
+    case "$refname" in
+        refs/heads/*)
+            branch="${{refname#refs/heads/}}"
+            GIT_WORK_TREE=/home/{}/work/{} git checkout -f "$branch"
+            ;;
+    esac
+done
 HOOKEOF
 "#,
             username, name, username, name
