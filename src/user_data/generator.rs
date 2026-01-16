@@ -98,7 +98,12 @@ fn validate_username(username: &str) -> Result<()> {
 }
 
 /// Generate cloud-init user data script from profile
-pub fn generate_user_data(profile: &Profile, project_name: Option<&str>, username: &str) -> Result<String> {
+pub fn generate_user_data(
+    profile: &Profile,
+    project_name: Option<&str>,
+    username: &str,
+    ssh_public_key: Option<&str>,
+) -> Result<String> {
     // Validate username before using in shell commands
     validate_username(username)?;
 
@@ -123,6 +128,28 @@ pub fn generate_user_data(profile: &Profile, project_name: Option<&str>, usernam
     script.push_str("    systemctl enable amazon-ssm-agent 2>/dev/null || true\n");
     script.push_str("    systemctl start amazon-ssm-agent 2>/dev/null || true\n");
     script.push_str("fi\n\n");
+
+    // Add SSH public key to authorized_keys
+    if let Some(key) = ssh_public_key {
+        script.push_str("echo 'Configuring SSH public key...'\n");
+        script.push_str(&format!("mkdir -p /home/{}/.ssh\n", username));
+        script.push_str(&format!(
+            "cat >> /home/{}/.ssh/authorized_keys << 'SSHEOF'\n",
+            username
+        ));
+        script.push_str(key);
+        script.push_str("\nSSHEOF\n");
+        // Set correct permissions (critical for SSH to work)
+        script.push_str(&format!("chmod 700 /home/{}/.ssh\n", username));
+        script.push_str(&format!(
+            "chmod 600 /home/{}/.ssh/authorized_keys\n",
+            username
+        ));
+        script.push_str(&format!(
+            "chown -R {}:{} /home/{}/.ssh\n\n",
+            username, username, username
+        ));
+    }
 
     // Validate and install system packages (Ubuntu/apt-get only)
     script.push_str("echo 'Installing system packages...'\n");
@@ -259,7 +286,8 @@ mod tests {
     #[test]
     fn test_generate_basic_user_data() {
         let profile = Profile::default_profile();
-        let script = generate_user_data(&profile, Some("test-project"), "ubuntu").unwrap();
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None).unwrap();
 
         assert!(script.contains("#!/bin/bash"));
         assert!(script.contains("rustup"));
@@ -273,7 +301,7 @@ mod tests {
     #[test]
     fn test_generate_without_project() {
         let profile = Profile::default_profile();
-        let script = generate_user_data(&profile, None, "ubuntu").unwrap();
+        let script = generate_user_data(&profile, None, "ubuntu", None).unwrap();
 
         assert!(script.contains("#!/bin/bash"));
         assert!(!script.contains("git init --bare"));
@@ -283,11 +311,37 @@ mod tests {
     #[test]
     fn test_generate_with_ubuntu_user() {
         let profile = Profile::default_profile();
-        let script = generate_user_data(&profile, Some("myproject"), "ubuntu").unwrap();
+        let script =
+            generate_user_data(&profile, Some("myproject"), "ubuntu", None).unwrap();
 
         assert!(script.contains("su - ubuntu"));
         assert!(script.contains("/home/ubuntu/"));
         assert!(!script.contains("ec2-user"));
+    }
+
+    #[test]
+    fn test_generate_with_ssh_key() {
+        let profile = Profile::default_profile();
+        // Use a realistic key length (at least 50 chars base64)
+        let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key)).unwrap();
+
+        assert!(script.contains("mkdir -p /home/ubuntu/.ssh"));
+        assert!(script.contains("authorized_keys"));
+        assert!(script.contains(ssh_key));
+        assert!(script.contains("chmod 700 /home/ubuntu/.ssh"));
+        assert!(script.contains("chmod 600 /home/ubuntu/.ssh/authorized_keys"));
+        assert!(script.contains("chown -R ubuntu:ubuntu /home/ubuntu/.ssh"));
+    }
+
+    #[test]
+    fn test_generate_without_ssh_key() {
+        let profile = Profile::default_profile();
+        let script = generate_user_data(&profile, None, "ubuntu", None).unwrap();
+
+        assert!(!script.contains("Configuring SSH public key"));
+        assert!(!script.contains("authorized_keys"));
     }
 
     #[test]
@@ -313,7 +367,7 @@ mod tests {
         let mut profile = Profile::default_profile();
         profile.packages.system = vec!["gcc; rm -rf /".to_string()];
 
-        let result = generate_user_data(&profile, None, "ubuntu");
+        let result = generate_user_data(&profile, None, "ubuntu", None);
         assert!(result.is_err());
     }
 
@@ -322,7 +376,7 @@ mod tests {
         let mut profile = Profile::default_profile();
         profile.environment.insert("MALICIOUS".to_string(), "$(cat /etc/passwd)".to_string());
 
-        let result = generate_user_data(&profile, None, "ubuntu");
+        let result = generate_user_data(&profile, None, "ubuntu", None);
         assert!(result.is_err());
     }
 }

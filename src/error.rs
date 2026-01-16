@@ -74,6 +74,12 @@ pub enum Ec2CliError {
     #[error("SCP transfer failed: {0}")]
     ScpTransfer(String),
 
+    #[error("SSH public key not found. Checked: {0}")]
+    SshKeyNotFound(String),
+
+    #[error("SSH public key invalid: {0}")]
+    SshKeyInvalid(String),
+
     // Path Errors
     #[error("Invalid path: {0}")]
     InvalidPath(String),

@@ -6,6 +6,7 @@ mod config;
 mod error;
 mod git;
 mod profile;
+mod ssh;
 mod state;
 mod ui;
 mod user_data;

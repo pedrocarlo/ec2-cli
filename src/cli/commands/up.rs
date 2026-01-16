@@ -6,9 +6,10 @@ use crate::aws::ec2::instance::{
 use crate::aws::infrastructure::Infrastructure;
 use crate::config::Settings;
 use crate::profile::ProfileLoader;
+use crate::ssh::find_ssh_public_key;
 use crate::ui::create_spinner;
 use crate::user_data::{generate_user_data, validate_project_name};
-use crate::Result;
+use crate::{Ec2CliError, Result};
 
 /// Get the SSH username (always ubuntu for Ubuntu AMIs)
 fn get_username_for_ami(_ami_type: &str) -> &'static str {
@@ -70,8 +71,28 @@ pub async fn execute(
         validate_project_name(proj_name)?;
     }
 
+    // Load SSH public key (required for SSH access)
+    let ssh_public_key = match find_ssh_public_key() {
+        Ok(key) => key,
+        Err(Ec2CliError::SshKeyNotFound(paths)) => {
+            eprintln!("Error: No SSH public key found. Checked:");
+            for path in paths.split(", ") {
+                eprintln!("  - {}", path);
+            }
+            eprintln!("\nTo generate a key: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519");
+            eprintln!("Or place a key at: .ec2-cli/ssh_public_key");
+            return Err(Ec2CliError::SshKeyNotFound(paths));
+        }
+        Err(e) => return Err(e),
+    };
+
     // Generate user data
-    let user_data = generate_user_data(&profile, project_name.as_deref(), username)?;
+    let user_data = generate_user_data(
+        &profile,
+        project_name.as_deref(),
+        username,
+        Some(&ssh_public_key),
+    )?;
 
     // Launch instance (cleanup security group on failure)
     let spinner = create_spinner("Launching instance...");
