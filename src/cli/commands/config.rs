@@ -7,6 +7,7 @@ use crate::aws::client::{get_default_vpc, AwsClients};
 use crate::config::Settings;
 use crate::git::{check_ssh_config, generate_ssh_config_block, SshConfigStatus};
 use crate::profile::ProfileLoader;
+use crate::ui::create_spinner;
 use crate::{Ec2CliError, Result};
 
 pub async fn init() -> Result<()> {
@@ -120,12 +121,17 @@ pub async fn init() -> Result<()> {
     settings.region = Some(region.clone());
 
     // Create clients with the selected region
+    let spinner = create_spinner("Connecting to AWS...");
     let clients = AwsClients::with_region(&region).await.map_err(|e| {
+        spinner.finish_and_clear();
         Ec2CliError::Config(format!("Failed to connect to AWS in region '{}': {}", region, e))
     })?;
+    spinner.finish_and_clear();
 
     // Configure VPC
+    let spinner = create_spinner("Looking up VPC...");
     let default_vpc_id = get_default_vpc(&clients).await.ok();
+    spinner.finish_and_clear();
     let current_vpc = settings.vpc_id.clone().or(default_vpc_id.clone());
 
     let vpc_prompt = if let Some(ref vpc) = current_vpc {
@@ -147,7 +153,9 @@ pub async fn init() -> Result<()> {
     } else {
         // Validate format before API call
         Settings::validate_vpc_id(&vpc_input)?;
+        let spinner = create_spinner("Validating VPC...");
         validate_vpc(&clients, &vpc_input).await?;
+        spinner.finish_and_clear();
         vpc_input
     };
 
@@ -159,7 +167,9 @@ pub async fn init() -> Result<()> {
     };
 
     // Configure subnet - list available subnets in the VPC
+    let spinner = create_spinner("Fetching subnets...");
     let subnets = list_subnets(&clients, &vpc_id).await?;
+    spinner.finish_and_clear();
     if subnets.is_empty() {
         return Err(Ec2CliError::NoSubnetsInVpc(vpc_id));
     }

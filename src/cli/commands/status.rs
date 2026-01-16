@@ -1,6 +1,7 @@
 use crate::aws::client::AwsClients;
 use crate::aws::ec2::instance::get_instance_state;
 use crate::state::{get_instance, resolve_instance_name};
+use crate::ui::create_spinner;
 use crate::{Ec2CliError, Result};
 
 pub async fn execute(name: Option<String>) -> Result<()> {
@@ -18,13 +19,16 @@ pub async fn execute(name: Option<String>) -> Result<()> {
     println!("  Created: {}", instance_state.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
 
     // Get live status from AWS
+    let spinner = create_spinner("Fetching instance status...");
     let clients = AwsClients::with_region(&instance_state.region).await?;
 
     match get_instance_state(&clients, &instance_state.instance_id).await {
         Ok(state) => {
+            spinner.finish_and_clear();
             println!("  State: {:?}", state);
         }
         Err(e) => {
+            spinner.finish_and_clear();
             println!("  State: unknown ({})", e);
         }
     }

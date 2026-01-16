@@ -1,5 +1,3 @@
-use indicatif::{ProgressBar, ProgressStyle};
-
 use crate::aws::client::AwsClients;
 use crate::aws::ec2::instance::{
     create_instance_security_group, delete_security_group, launch_instance, wait_for_running,
@@ -8,6 +6,7 @@ use crate::aws::ec2::instance::{
 use crate::aws::infrastructure::Infrastructure;
 use crate::config::Settings;
 use crate::profile::ProfileLoader;
+use crate::ui::create_spinner;
 use crate::user_data::{generate_user_data, validate_project_name};
 use crate::Result;
 
@@ -91,7 +90,7 @@ pub async fn execute(
             id
         }
         Err(e) => {
-            spinner.finish_with_message("Launch failed");
+            spinner.finish_and_clear();
             // Cleanup security group on launch failure
             let _ = delete_security_group(&clients, &security_group_id).await;
             return Err(e);
@@ -135,18 +134,6 @@ pub async fn execute(
     }
 
     Ok(())
-}
-
-fn create_spinner(message: &str) -> ProgressBar {
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    spinner.set_message(message.to_string());
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-    spinner
 }
 
 fn create_link_file(name: &str) -> Result<()> {

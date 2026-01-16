@@ -7,6 +7,7 @@ mod error;
 mod git;
 mod profile;
 mod state;
+mod ui;
 mod user_data;
 
 pub use error::{Ec2CliError, Result};
