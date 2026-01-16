@@ -5,6 +5,7 @@ use crate::aws::ec2::instance::{
 };
 use crate::aws::infrastructure::Infrastructure;
 use crate::config::Settings;
+use crate::git::find_git_user_config;
 use crate::profile::ProfileLoader;
 use crate::ssh::find_ssh_public_key;
 use crate::ui::create_spinner;
@@ -108,12 +109,27 @@ pub async fn execute(
         Err(e) => return Err(e),
     };
 
+    // Detect local git user config
+    let git_user_config = find_git_user_config();
+    if let Some(ref name) = git_user_config.name {
+        println!("  Git user.name: {}", name);
+    }
+    if let Some(ref email) = git_user_config.email {
+        println!("  Git user.email: {}", email);
+    }
+
     // Generate user data
+    let git_config_ref = if git_user_config.has_config() {
+        Some(&git_user_config)
+    } else {
+        None
+    };
     let user_data = generate_user_data(
         &profile,
         project_name.as_deref(),
         username,
         Some(&ssh_key_info.public_key),
+        git_config_ref,
     )?;
 
     // Launch instance (cleanup security group on failure)

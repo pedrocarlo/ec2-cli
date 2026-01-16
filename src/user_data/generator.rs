@@ -1,3 +1,4 @@
+use crate::git::GitUserConfig;
 use crate::profile::Profile;
 use crate::{Ec2CliError, Result};
 
@@ -97,15 +98,61 @@ fn validate_username(username: &str) -> Result<()> {
     Ok(())
 }
 
+/// Characters that are dangerous in git config values.
+/// More permissive than SHELL_METACHARACTERS - allows spaces, @, ., +, - for names/emails.
+const GIT_CONFIG_DANGEROUS_CHARS: &[char] = &[
+    ';', '&', '|', '$', '`', '(', ')', '{', '}', '[', ']', '<', '>', '\'', '"', '\\', '\n', '\r',
+    '!', '#', '*', '?', '~',
+];
+
+/// Maximum length for git config values (prevents user-data size issues)
+const GIT_CONFIG_MAX_LENGTH: usize = 256;
+
+/// Validate a git config value is safe to use in shell commands.
+/// Allows spaces, @, ., +, - which are needed for names and email addresses.
+/// Blocks shell metacharacters that could enable command injection.
+fn validate_git_config_value(value: &str, context: &str) -> Result<()> {
+    if value.is_empty() {
+        return Err(Ec2CliError::ProfileValidation(format!(
+            "{} cannot be empty",
+            context
+        )));
+    }
+    if value.len() > GIT_CONFIG_MAX_LENGTH {
+        return Err(Ec2CliError::ProfileValidation(format!(
+            "{} exceeds maximum length of {} characters",
+            context, GIT_CONFIG_MAX_LENGTH
+        )));
+    }
+    if value.chars().any(|c| GIT_CONFIG_DANGEROUS_CHARS.contains(&c)) {
+        return Err(Ec2CliError::ProfileValidation(format!(
+            "Invalid characters in {}: '{}'. Shell metacharacters are not allowed.",
+            context, value
+        )));
+    }
+    Ok(())
+}
+
 /// Generate cloud-init user data script from profile
 pub fn generate_user_data(
     profile: &Profile,
     project_name: Option<&str>,
     username: &str,
     ssh_public_key: Option<&str>,
+    git_user_config: Option<&GitUserConfig>,
 ) -> Result<String> {
     // Validate username before using in shell commands
     validate_username(username)?;
+
+    // Validate git config values if provided
+    if let Some(config) = git_user_config {
+        if let Some(ref name) = config.name {
+            validate_git_config_value(name, "git user.name")?;
+        }
+        if let Some(ref email) = config.email {
+            validate_git_config_value(email, "git user.email")?;
+        }
+    }
 
     let mut script = String::from("#!/bin/bash\nset -ex\n\n");
 
@@ -136,6 +183,26 @@ pub fn generate_user_data(
             "chown -R {}:{} /home/{}/.ssh\n\n",
             username, username, username
         ));
+    }
+
+    // Configure git user identity if provided
+    if let Some(config) = git_user_config {
+        if config.has_config() {
+            script.push_str("echo 'Configuring git user identity...'\n");
+            if let Some(ref name) = config.name {
+                script.push_str(&format!(
+                    "su - {} -c 'git config --global user.name \"{}\"'\n",
+                    username, name
+                ));
+            }
+            if let Some(ref email) = config.email {
+                script.push_str(&format!(
+                    "su - {} -c 'git config --global user.email \"{}\"'\n",
+                    username, email
+                ));
+            }
+            script.push('\n');
+        }
     }
 
     // Create git repo directories and bare repo EARLY - before cloud-init wait
@@ -357,7 +424,7 @@ mod tests {
     fn test_generate_basic_user_data() {
         let profile = Profile::default_profile();
         let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None).unwrap();
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, None).unwrap();
 
         assert!(script.contains("#!/bin/bash"));
         assert!(script.contains("rustup"));
@@ -371,7 +438,7 @@ mod tests {
     #[test]
     fn test_generate_without_project() {
         let profile = Profile::default_profile();
-        let script = generate_user_data(&profile, None, "ubuntu", None).unwrap();
+        let script = generate_user_data(&profile, None, "ubuntu", None, None).unwrap();
 
         assert!(script.contains("#!/bin/bash"));
         assert!(!script.contains("git init --bare"));
@@ -382,7 +449,7 @@ mod tests {
     fn test_generate_with_ubuntu_user() {
         let profile = Profile::default_profile();
         let script =
-            generate_user_data(&profile, Some("myproject"), "ubuntu", None).unwrap();
+            generate_user_data(&profile, Some("myproject"), "ubuntu", None, None).unwrap();
 
         assert!(script.contains("su - ubuntu"));
         assert!(script.contains("/home/ubuntu/"));
@@ -395,7 +462,7 @@ mod tests {
         // Use a realistic key length (at least 50 chars base64)
         let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
         let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key)).unwrap();
+            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key), None).unwrap();
 
         assert!(script.contains("mkdir -p /home/ubuntu/.ssh"));
         assert!(script.contains("authorized_keys"));
@@ -408,7 +475,7 @@ mod tests {
     #[test]
     fn test_generate_without_ssh_key() {
         let profile = Profile::default_profile();
-        let script = generate_user_data(&profile, None, "ubuntu", None).unwrap();
+        let script = generate_user_data(&profile, None, "ubuntu", None, None).unwrap();
 
         assert!(!script.contains("Configuring SSH public key"));
         assert!(!script.contains("authorized_keys"));
@@ -421,7 +488,7 @@ mod tests {
         let profile = Profile::default_profile();
         let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
         let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key)).unwrap();
+            generate_user_data(&profile, Some("test-project"), "ubuntu", Some(ssh_key), None).unwrap();
 
         let ssh_config_pos = script
             .find("Configuring SSH public key")
@@ -440,7 +507,7 @@ mod tests {
     fn test_git_ready_marker_created_after_repo_setup() {
         let profile = Profile::default_profile();
         let script =
-            generate_user_data(&profile, Some("test-project"), "ubuntu", None).unwrap();
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, None).unwrap();
 
         let repo_setup_pos = script
             .find("git init --bare")
@@ -453,6 +520,71 @@ mod tests {
             marker_pos > repo_setup_pos,
             "Marker file must be created after git repo setup"
         );
+    }
+
+    #[test]
+    fn test_generate_with_git_user_config() {
+        let profile = Profile::default_profile();
+        let git_config = GitUserConfig {
+            name: Some("John Doe".to_string()),
+            email: Some("john@example.com".to_string()),
+        };
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+
+        assert!(script.contains("Configuring git user identity"));
+        assert!(script.contains("git config --global user.name \"John Doe\""));
+        assert!(script.contains("git config --global user.email \"john@example.com\""));
+    }
+
+    #[test]
+    fn test_generate_with_name_only_git_config() {
+        let profile = Profile::default_profile();
+        let git_config = GitUserConfig {
+            name: Some("John Doe".to_string()),
+            email: None,
+        };
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+
+        assert!(script.contains("git config --global user.name \"John Doe\""));
+        assert!(!script.contains("git config --global user.email"));
+    }
+
+    #[test]
+    fn test_generate_with_email_only_git_config() {
+        let profile = Profile::default_profile();
+        let git_config = GitUserConfig {
+            name: None,
+            email: Some("john@example.com".to_string()),
+        };
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config)).unwrap();
+
+        assert!(!script.contains("git config --global user.name"));
+        assert!(script.contains("git config --global user.email \"john@example.com\""));
+    }
+
+    #[test]
+    fn test_generate_without_git_config() {
+        let profile = Profile::default_profile();
+        let script =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, None).unwrap();
+
+        assert!(!script.contains("Configuring git user identity"));
+    }
+
+    #[test]
+    fn test_git_config_injection_blocked() {
+        let profile = Profile::default_profile();
+        let git_config = GitUserConfig {
+            name: Some("John; rm -rf /".to_string()),
+            email: None,
+        };
+        let result =
+            generate_user_data(&profile, Some("test-project"), "ubuntu", None, Some(&git_config));
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -478,7 +610,7 @@ mod tests {
         let mut profile = Profile::default_profile();
         profile.packages.system = vec!["gcc; rm -rf /".to_string()];
 
-        let result = generate_user_data(&profile, None, "ubuntu", None);
+        let result = generate_user_data(&profile, None, "ubuntu", None, None);
         assert!(result.is_err());
     }
 
@@ -487,7 +619,7 @@ mod tests {
         let mut profile = Profile::default_profile();
         profile.environment.insert("MALICIOUS".to_string(), "$(cat /etc/passwd)".to_string());
 
-        let result = generate_user_data(&profile, None, "ubuntu", None);
+        let result = generate_user_data(&profile, None, "ubuntu", None, None);
         assert!(result.is_err());
     }
 }
