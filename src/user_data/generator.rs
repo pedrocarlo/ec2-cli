@@ -445,6 +445,19 @@ MOTDEOF
         username
     ));
 
+    // Install AgentFS (requires lifting AppArmor restrictions for unprivileged user namespaces)
+    script.push_str("echo 'Configuring AppArmor for AgentFS...'\n");
+    script.push_str("cat > /etc/sysctl.d/99-agentfs.conf << 'AGENTFSEOF'\n");
+    script.push_str("kernel.apparmor_restrict_unprivileged_userns = 0\n");
+    script.push_str("AGENTFSEOF\n");
+    script.push_str("sysctl -p /etc/sysctl.d/99-agentfs.conf\n\n");
+
+    script.push_str("echo 'Installing AgentFS...'\n");
+    script.push_str(&format!(
+        "su - {} -c 'curl -fsSL https://agentfs.ai/install.sh | bash'\n\n",
+        username
+    ));
+
     // Signal completion
     script.push_str("echo 'ec2-cli initialization complete!'\n");
     script.push_str(&format!("touch /home/{}/.ec2-cli-ready\n", username));
@@ -689,5 +702,20 @@ mod tests {
 
         let result = generate_user_data(&profile, None, "ubuntu", None, None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_agentfs_installed_by_default() {
+        let profile = Profile::default_profile();
+        let script = generate_user_data(&profile, None, "ubuntu", None, None).unwrap();
+
+        // Check AppArmor configuration
+        assert!(script.contains("/etc/sysctl.d/99-agentfs.conf"));
+        assert!(script.contains("kernel.apparmor_restrict_unprivileged_userns = 0"));
+        assert!(script.contains("sysctl -p /etc/sysctl.d/99-agentfs.conf"));
+
+        // Check AgentFS installation
+        assert!(script.contains("Installing AgentFS"));
+        assert!(script.contains("agentfs.ai/install.sh"));
     }
 }
