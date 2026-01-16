@@ -100,7 +100,7 @@ impl Settings {
                 "Tag key cannot start with 'aws:' (reserved prefix)".to_string(),
             ));
         }
-        if !key.chars().all(|c| c.is_ascii() && c >= ' ' && c <= '~') {
+        if !key.chars().all(|c| c.is_ascii() && (' '..='~').contains(&c)) {
             return Err(Ec2CliError::Config(
                 "Tag key must contain only ASCII printable characters".to_string(),
             ));
@@ -115,7 +115,7 @@ impl Settings {
                 "Tag value cannot exceed 256 characters".to_string(),
             ));
         }
-        if !value.chars().all(|c| c.is_ascii() && c >= ' ' && c <= '~') {
+        if !value.chars().all(|c| c.is_ascii() && (' '..='~').contains(&c)) {
             return Err(Ec2CliError::Config(
                 "Tag value must contain only ASCII printable characters".to_string(),
             ));

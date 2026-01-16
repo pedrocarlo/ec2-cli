@@ -1,6 +1,6 @@
 use crate::{Ec2CliError, Result};
 use directories::ProjectDirs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::schema::Profile;
 
@@ -78,7 +78,7 @@ impl ProfileLoader {
         Err(Ec2CliError::ProfileNotFound(name.to_string()))
     }
 
-    fn try_load_from_dir(&self, dir: &PathBuf, name: &str) -> Result<Option<Profile>> {
+    fn try_load_from_dir(&self, dir: &Path, name: &str) -> Result<Option<Profile>> {
         // Try .json5 first, then .json
         for ext in ["json5", "json"] {
             let path = dir.join(format!("{}.{}", name, ext));
@@ -166,7 +166,7 @@ impl Default for ProfileLoader {
     }
 }
 
-fn extract_profile_name(path: &PathBuf) -> Option<String> {
+fn extract_profile_name(path: &Path) -> Option<String> {
     let ext = path.extension()?.to_str()?;
     if ext != "json" && ext != "json5" {
         return None;

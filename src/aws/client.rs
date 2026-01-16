@@ -67,7 +67,7 @@ impl AwsClients {
         let region = config
             .region()
             .map(|r| r.to_string())
-            .ok_or_else(|| Ec2CliError::AwsCredentials)?;
+            .ok_or(Ec2CliError::AwsCredentials)?;
 
         let ec2 = Ec2Client::new(&config);
         let ssm = SsmClient::new(&config);
@@ -83,7 +83,7 @@ impl AwsClients {
 
         let account_id = identity
             .account()
-            .ok_or_else(|| Ec2CliError::AwsCredentials)?
+            .ok_or(Ec2CliError::AwsCredentials)?
             .to_string();
 
         Ok(Self {
@@ -116,7 +116,7 @@ impl AwsClients {
 
         let account_id = identity
             .account()
-            .ok_or_else(|| Ec2CliError::AwsCredentials)?
+            .ok_or(Ec2CliError::AwsCredentials)?
             .to_string();
 
         Ok(Self {

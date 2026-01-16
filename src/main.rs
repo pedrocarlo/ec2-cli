@@ -236,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
                 if profiles.is_empty() {
                     println!("No profiles found.");
                 } else {
-                    println!("{:<20} {:<10} {}", "NAME", "SOURCE", "PATH");
+                    println!("{:<20} {:<10} PATH", "NAME", "SOURCE");
                     println!("{}", "-".repeat(60));
                     for info in profiles {
                         let path_str = info

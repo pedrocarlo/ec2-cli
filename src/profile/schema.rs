@@ -67,18 +67,10 @@ fn default_architecture() -> String {
     "x86_64".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StorageConfig {
     #[serde(default)]
     pub root_volume: RootVolumeConfig,
-}
-
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            root_volume: RootVolumeConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

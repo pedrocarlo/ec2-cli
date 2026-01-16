@@ -251,7 +251,7 @@ HOOKEOF
                 profile.packages.rust.channel
             ));
         }
-        script.push_str("\n");
+        script.push('\n');
 
         // Source cargo env and install components
         script.push_str("source ~/.cargo/env\n");
