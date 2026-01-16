@@ -3,16 +3,30 @@ use std::process::{Command, Stdio};
 use crate::{Ec2CliError, Result};
 
 /// Push to a remote via git subprocess
-pub fn git_push(remote: &str, branch: Option<&str>) -> Result<()> {
+pub fn git_push(
+    remote: &str,
+    branch: Option<&str>,
+    set_upstream: bool,
+    ssh_command: Option<&str>,
+) -> Result<()> {
     let mut cmd = Command::new("git");
-    cmd.arg("push").arg(remote);
+    cmd.arg("push");
+
+    if set_upstream {
+        cmd.arg("--set-upstream");
+    }
+
+    cmd.arg(remote);
 
     if let Some(b) = branch {
         cmd.arg(b);
     }
 
-    cmd.stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+    if let Some(ssh_cmd) = ssh_command {
+        cmd.env("GIT_SSH_COMMAND", ssh_cmd);
+    }
+
+    cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
 
     let status = cmd.status().map_err(|e| Ec2CliError::Git(e.to_string()))?;
 
@@ -27,7 +41,7 @@ pub fn git_push(remote: &str, branch: Option<&str>) -> Result<()> {
 }
 
 /// Pull from a remote via git subprocess
-pub fn git_pull(remote: &str, branch: Option<&str>) -> Result<()> {
+pub fn git_pull(remote: &str, branch: Option<&str>, ssh_command: Option<&str>) -> Result<()> {
     let mut cmd = Command::new("git");
     cmd.arg("pull").arg(remote);
 
@@ -35,8 +49,11 @@ pub fn git_pull(remote: &str, branch: Option<&str>) -> Result<()> {
         cmd.arg(b);
     }
 
-    cmd.stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+    if let Some(ssh_cmd) = ssh_command {
+        cmd.env("GIT_SSH_COMMAND", ssh_cmd);
+    }
+
+    cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
 
     let status = cmd.status().map_err(|e| Ec2CliError::Git(e.to_string()))?;
 

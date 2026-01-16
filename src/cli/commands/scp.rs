@@ -1,10 +1,10 @@
-use std::borrow::Cow;
+use std::process::Command;
 
-use shell_escape::escape;
-
-use super::ssm_ssh_options;
 use crate::state::{get_instance, resolve_instance_name};
 use crate::{Ec2CliError, Result};
+
+const PROXY_COMMAND: &str =
+    "sh -c \"aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p\"";
 
 pub fn execute(name: String, src: String, dest: String, recursive: bool) -> Result<()> {
     // Resolve instance name
@@ -17,20 +17,35 @@ pub fn execute(name: String, src: String, dest: String, recursive: bool) -> Resu
     // Parse source and destination to determine direction
     let (local_path, remote_path, is_upload) = parse_paths(&src, &dest)?;
 
-    let escaped_remote_path = escape(Cow::Borrowed(&remote_path));
     let remote = format!(
         "{}@{}:{}",
-        instance_state.username, instance_state.instance_id, escaped_remote_path
+        instance_state.username, instance_state.instance_id, remote_path
     );
 
-    let ssm_opts = ssm_ssh_options();
-    let recursive_flag = if recursive { "-r " } else { "" };
-    let escaped_local = escape(Cow::Borrowed(&local_path));
+    let mut cmd = Command::new("scp");
+    cmd.arg("-o")
+        .arg(format!("ProxyCommand={}", PROXY_COMMAND))
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null");
+
+    if recursive {
+        cmd.arg("-r");
+    }
 
     if is_upload {
-        println!("scp {} {}{} {}", ssm_opts, recursive_flag, escaped_local, remote);
+        cmd.arg(&local_path).arg(&remote);
     } else {
-        println!("scp {} {}{} {}", ssm_opts, recursive_flag, remote, escaped_local);
+        cmd.arg(&remote).arg(&local_path);
+    }
+
+    let status = cmd
+        .status()
+        .map_err(|e| Ec2CliError::ScpTransfer(format!("Failed to execute scp: {}", e)))?;
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
     }
 
     Ok(())

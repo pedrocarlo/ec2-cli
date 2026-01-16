@@ -3,6 +3,8 @@ use crate::state::{get_instance, resolve_instance_name};
 use crate::user_data::validate_project_name;
 use crate::{Ec2CliError, Result};
 
+use super::ssm_ssh_command;
+
 pub fn execute(name: String, branch: Option<String>) -> Result<()> {
     // Check we're in a git repo
     if !is_git_repo() {
@@ -42,9 +44,9 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
         add_remote(&remote_name, &remote_url)?;
     }
 
-    // Pull from remote
+    // Pull from remote with SSM SSH command
     println!("Pulling from {}...", remote_name);
-    git_pull(&remote_name, branch.as_deref())?;
+    git_pull(&remote_name, branch.as_deref(), Some(ssm_ssh_command()))?;
 
     println!("Pull complete!");
     Ok(())

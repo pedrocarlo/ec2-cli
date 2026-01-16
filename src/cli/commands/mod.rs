@@ -9,12 +9,11 @@ pub mod ssh;
 pub mod status;
 pub mod up;
 
-/// Returns SSH options for routing connections through AWS SSM Session Manager.
-/// These options configure SSH to use SSM as a proxy and disable host key checking
-/// since instance IDs won't be in known_hosts.
-pub fn ssm_ssh_options() -> &'static str {
+/// Returns the SSH command string for use with GIT_SSH_COMMAND environment variable.
+/// This routes git SSH connections through AWS SSM Session Manager.
+pub fn ssm_ssh_command() -> &'static str {
     concat!(
-        "-o 'ProxyCommand=sh -c \"aws ssm start-session --target %h ",
+        "ssh -o 'ProxyCommand=sh -c \"aws ssm start-session --target %h ",
         "--document-name AWS-StartSSHSession --parameters portNumber=%p\"' ",
         "-o StrictHostKeyChecking=no ",
         "-o UserKnownHostsFile=/dev/null"
