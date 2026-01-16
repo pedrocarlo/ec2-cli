@@ -167,12 +167,12 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Destroy { name, force } => {
-            println!("Destroying instance: {}, Force: {}", name, force);
-            todo!("Implement destroy command")
+            cli::commands::destroy::execute(name, force).await?;
+            Ok(())
         }
         Commands::Ssh { name, command } => {
-            println!("SSH to: {}, Command: {:?}", name, command);
-            todo!("Implement ssh command")
+            cli::commands::ssh::execute(name, command)?;
+            Ok(())
         }
         Commands::Scp {
             name,
@@ -180,27 +180,24 @@ async fn main() -> anyhow::Result<()> {
             dest,
             recursive,
         } => {
-            println!(
-                "SCP {} -> {} on {}, Recursive: {}",
-                src, dest, name, recursive
-            );
-            todo!("Implement scp command")
+            cli::commands::scp::execute(name, src, dest, recursive)?;
+            Ok(())
         }
         Commands::Push { name, branch } => {
-            println!("Push to: {}, Branch: {:?}", name, branch);
-            todo!("Implement push command")
+            cli::commands::push::execute(name, branch)?;
+            Ok(())
         }
         Commands::Pull { name, branch } => {
-            println!("Pull from: {}, Branch: {:?}", name, branch);
-            todo!("Implement pull command")
+            cli::commands::pull::execute(name, branch)?;
+            Ok(())
         }
         Commands::Status { name } => {
-            println!("Status for: {:?}", name);
-            todo!("Implement status command")
+            cli::commands::status::execute(name).await?;
+            Ok(())
         }
         Commands::List { all } => {
-            println!("List instances, All: {}", all);
-            todo!("Implement list command")
+            cli::commands::list::execute(all)?;
+            Ok(())
         }
         Commands::Profile { command } => match command {
             ProfileCommands::List => {
@@ -282,17 +279,17 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Config { command } => match command {
             ConfigCommands::Init => {
-                println!("Initializing configuration...");
-                todo!("Implement config init")
+                cli::commands::config::init().await?;
+                Ok(())
             }
             ConfigCommands::Show => {
-                println!("Showing configuration...");
-                todo!("Implement config show")
+                cli::commands::config::show()?;
+                Ok(())
             }
         },
         Commands::Logs { name, follow } => {
-            println!("Logs for: {}, Follow: {}", name, follow);
-            todo!("Implement logs command")
+            cli::commands::logs::execute(name, follow)?;
+            Ok(())
         }
     }
 }
