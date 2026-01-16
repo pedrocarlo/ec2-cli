@@ -123,21 +123,55 @@ pub enum Ec2CliError {
     Other(String),
 }
 
+macro_rules! format_sdk_error {
+    ($sdk:ident, $err:expr) => {{
+        use $sdk::error::SdkError;
+        match &$err {
+            SdkError::ServiceError(service_err) => format!("{:?}", service_err.err()),
+            SdkError::TimeoutError(_) => "Request timed out".to_string(),
+            SdkError::DispatchFailure(dispatch) => {
+                if dispatch.is_io() {
+                    "Network error - please check your connection".to_string()
+                } else if dispatch.is_timeout() {
+                    "Connection timed out".to_string()
+                } else {
+                    format!("Connection error: {:?}", dispatch)
+                }
+            }
+            SdkError::ConstructionFailure(_) => "Failed to construct request".to_string(),
+            SdkError::ResponseError(resp) => format!("Response error: {:?}", resp),
+            _ => $err.to_string(),
+        }
+    }};
+}
+
 impl Ec2CliError {
     pub fn aws_sdk(err: impl std::fmt::Display) -> Self {
         Ec2CliError::AwsSdk(err.to_string())
     }
 
-    pub fn ec2(err: impl std::fmt::Display) -> Self {
-        Ec2CliError::Ec2(err.to_string())
+    pub fn ec2<E, R>(err: aws_sdk_ec2::error::SdkError<E, R>) -> Self
+    where
+        E: std::fmt::Debug,
+        R: std::fmt::Debug,
+    {
+        Ec2CliError::Ec2(format_sdk_error!(aws_sdk_ec2, err))
     }
 
-    pub fn ssm(err: impl std::fmt::Display) -> Self {
-        Ec2CliError::Ssm(err.to_string())
+    pub fn ssm<E, R>(err: aws_sdk_ssm::error::SdkError<E, R>) -> Self
+    where
+        E: std::fmt::Debug,
+        R: std::fmt::Debug,
+    {
+        Ec2CliError::Ssm(format_sdk_error!(aws_sdk_ssm, err))
     }
 
-    pub fn iam(err: impl std::fmt::Display) -> Self {
-        Ec2CliError::Iam(err.to_string())
+    pub fn iam<E, R>(err: aws_sdk_iam::error::SdkError<E, R>) -> Self
+    where
+        E: std::fmt::Debug,
+        R: std::fmt::Debug,
+    {
+        Ec2CliError::Iam(format_sdk_error!(aws_sdk_iam, err))
     }
 }
 
