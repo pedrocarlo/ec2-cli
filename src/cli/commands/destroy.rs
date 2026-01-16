@@ -1,18 +1,14 @@
 use dialoguer::Confirm;
 
 use crate::aws::client::AwsClients;
-use crate::aws::ec2::instance::{delete_security_group, terminate_instance};
+use crate::aws::ec2::instance::{delete_security_group, terminate_instance, wait_for_terminated};
 use crate::git::{list_remotes, remove_remote};
 use crate::state::{get_instance, remove_instance as remove_instance_state, resolve_instance_name};
 use crate::ui::create_spinner;
 use crate::{Ec2CliError, Result};
 
-/// Initial wait time before attempting to delete security group (seconds)
-const SG_DELETE_INITIAL_WAIT_SECS: u64 = 10;
-/// Maximum number of attempts to delete security group
-const SG_DELETE_MAX_ATTEMPTS: u32 = 6;
-/// Wait time between retry attempts (seconds)
-const SG_DELETE_RETRY_INTERVAL_SECS: u64 = 10;
+/// Timeout for waiting for instance termination (seconds)
+const TERMINATION_TIMEOUT_SECS: u64 = 120;
 
 pub async fn execute(name: String, force: bool) -> Result<()> {
     // Resolve instance name
@@ -49,46 +45,33 @@ pub async fn execute(name: String, force: bool) -> Result<()> {
     // Terminate the instance
     let spinner = create_spinner(format!("Terminating EC2 instance {}...", instance_state.instance_id));
     terminate_instance(&clients, &instance_state.instance_id).await?;
+    spinner.finish_with_message(format!("Instance {} terminating", instance_state.instance_id));
+
+    // Wait for instance to fully terminate before deleting security group
+    // The ENI isn't released until the instance reaches "terminated" state
+    let spinner = create_spinner("Waiting for instance to terminate...");
+    wait_for_terminated(&clients, &instance_state.instance_id, TERMINATION_TIMEOUT_SECS).await?;
     spinner.finish_with_message(format!("Instance {} terminated", instance_state.instance_id));
 
-    // Delete the security group (if present in state)
-    // Note: We need to wait a bit for the instance to terminate before we can delete the SG
-    if let Some(ref sg_id) = instance_state.security_group_id {
-        let spinner = create_spinner("Waiting before cleanup...");
-        // Wait for instance to terminate so SG can be deleted
-        tokio::time::sleep(tokio::time::Duration::from_secs(SG_DELETE_INITIAL_WAIT_SECS)).await;
-        spinner.finish_and_clear();
+    // Remove from state early - instance is confirmed terminated
+    // This makes the operation more resilient if cleanup steps fail or crash
+    remove_instance_state(&name)?;
 
+    // Best-effort security group cleanup
+    if let Some(ref sg_id) = instance_state.security_group_id {
         let spinner = create_spinner(format!("Deleting security group {}...", sg_id));
-        // Try a few times in case the instance hasn't fully terminated yet
-        let mut attempts = 0;
-        loop {
-            match delete_security_group(&clients, sg_id).await {
-                Ok(_) => {
-                    spinner.finish_with_message(format!("Security group {} deleted", sg_id));
-                    break;
-                }
-                Err(e) => {
-                    attempts += 1;
-                    if attempts >= SG_DELETE_MAX_ATTEMPTS {
-                        spinner.finish_with_message(format!(
-                            "Warning: Could not delete security group {}: {}",
-                            sg_id, e
-                        ));
-                        break;
-                    }
-                    // Wait and retry
-                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                        SG_DELETE_RETRY_INTERVAL_SECS,
-                    ))
-                    .await;
-                }
+        match delete_security_group(&clients, sg_id).await {
+            Ok(_) => {
+                spinner.finish_with_message(format!("Security group {} deleted", sg_id));
+            }
+            Err(e) => {
+                spinner.finish_with_message(format!(
+                    "Warning: Could not delete security group {}: {}",
+                    sg_id, e
+                ));
             }
         }
     }
-
-    // Remove from state
-    remove_instance_state(&name)?;
 
     // Try to remove git remote if it exists
     let remote_name = format!("ec2-{}", name);

@@ -346,3 +346,46 @@ pub async fn terminate_instance(clients: &AwsClients, instance_id: &str) -> Resu
 
     Ok(())
 }
+
+/// Wait for instance to be terminated
+pub async fn wait_for_terminated(
+    clients: &AwsClients,
+    instance_id: &str,
+    timeout_secs: u64,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+
+    loop {
+        if start.elapsed() > timeout {
+            return Err(Ec2CliError::Timeout(format!(
+                "Instance {} did not terminate within {} seconds",
+                instance_id, timeout_secs
+            )));
+        }
+
+        // If instance is no longer found, treat it as terminated
+        let state = match get_instance_state(clients, instance_id).await {
+            Ok(s) => s,
+            Err(Ec2CliError::InstanceNotFound(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+
+        match state {
+            InstanceStateName::Terminated => return Ok(()),
+            // Valid intermediate states during termination
+            InstanceStateName::ShuttingDown
+            | InstanceStateName::Stopping
+            | InstanceStateName::Stopped
+            | InstanceStateName::Running => {
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
+            other => {
+                return Err(Ec2CliError::InstanceState(format!(
+                    "Instance {} in unexpected state during termination: {:?}",
+                    instance_id, other
+                )));
+            }
+        }
+    }
+}
