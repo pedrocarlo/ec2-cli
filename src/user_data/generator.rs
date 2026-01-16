@@ -192,12 +192,14 @@ HOOKEOF
 
         // Configure bare repo to know its worktree location
         // Set core.bare=false since we're adding a worktree to a bare repo
+        // Note: Use --git-dir instead of -C because -C looks for .git subdirectory
+        // which doesn't exist in bare repos (the path itself IS the git directory)
         script.push_str(&format!(
-            "git -C /home/{}/repos/{}.git config core.bare false\n",
+            "git --git-dir=/home/{}/repos/{}.git config core.bare false\n",
             username, name
         ));
         script.push_str(&format!(
-            "git -C /home/{}/repos/{}.git config core.worktree /home/{}/work/{}\n",
+            "git --git-dir=/home/{}/repos/{}.git config core.worktree /home/{}/work/{}\n",
             username, name, username, name
         ));
 
@@ -247,10 +249,6 @@ READMEEOF
         // Create marker file to signal git repo is ready
         script.push_str(&format!("touch /home/{}/.ec2-cli-git-ready\n\n", username));
     }
-
-    // Wait for cloud-init to complete basic setup
-    script.push_str("echo 'Waiting for cloud-init...'\n");
-    script.push_str("cloud-init status --wait || true\n\n");
 
     // Ensure SSM agent is running (pre-installed on Ubuntu 18.04+ AMIs)
     // Handle both snap-based (Ubuntu 18.04+) and deb-based (older/custom AMIs) installations
@@ -417,9 +415,9 @@ mod tests {
     }
 
     #[test]
-    fn test_ssh_key_injected_before_cloud_init_wait() {
+    fn test_ssh_key_injected_before_package_installation() {
         // Ensure SSH key is available immediately when SSM reports ready,
-        // not after cloud-init completes (which can take minutes)
+        // not after package installation (which can take minutes)
         let profile = Profile::default_profile();
         let ssh_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com";
         let script =
@@ -428,13 +426,13 @@ mod tests {
         let ssh_config_pos = script
             .find("Configuring SSH public key")
             .expect("SSH config not found");
-        let cloud_init_pos = script
-            .find("Waiting for cloud-init")
-            .expect("cloud-init wait not found");
+        let package_install_pos = script
+            .find("Installing system packages")
+            .expect("package installation not found");
 
         assert!(
-            ssh_config_pos < cloud_init_pos,
-            "SSH key setup must occur before cloud-init wait to avoid race condition"
+            ssh_config_pos < package_install_pos,
+            "SSH key setup must occur before package installation to avoid race condition"
         );
     }
 
