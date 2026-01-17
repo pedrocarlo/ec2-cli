@@ -1,7 +1,4 @@
-use crate::git::{
-    add_remote, detect_vcs, git_pull, jj_add_remote, jj_fetch, jj_list_remotes, list_remotes,
-    VcsType,
-};
+use crate::git::{detect_vcs, PullOptions};
 use crate::state::{get_instance, resolve_instance_name};
 use crate::user_data::validate_project_name;
 use crate::{Ec2CliError, Result};
@@ -43,38 +40,19 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
     // Get SSH command for SSM
     let ssh_cmd = ssm_ssh_command(instance_state.ssh_key_path.as_deref());
 
-    match vcs {
-        VcsType::JJ => {
-            // Check if remote already exists
-            let remotes = jj_list_remotes()?;
-            if !remotes.contains(&remote_name) {
-                println!("Adding remote '{}': {}", remote_name, remote_url);
-                jj_add_remote(&remote_name, &remote_url)?;
-            }
-
-            // JJ uses fetch instead of pull (it auto-rebases)
-            // Note: branch parameter is ignored for JJ fetch as it fetches all refs
-            if branch.is_some() {
-                println!(
-                    "Note: JJ fetches all refs from remote, branch filter is not applied"
-                );
-            }
-
-            println!("Fetching from {} (using jj)...", remote_name);
-            jj_fetch(&remote_name, Some(&ssh_cmd))?;
-        }
-        VcsType::Git => {
-            // Check if remote already exists
-            let remotes = list_remotes()?;
-            if !remotes.contains(&remote_name) {
-                println!("Adding remote '{}': {}", remote_name, remote_url);
-                add_remote(&remote_name, &remote_url)?;
-            }
-
-            println!("Pulling from {}...", remote_name);
-            git_pull(&remote_name, branch.as_deref(), Some(&ssh_cmd))?;
-        }
+    // Ensure remote exists
+    if vcs.ensure_remote(&remote_name, &remote_url)? {
+        println!("Adding remote '{}': {}", remote_name, remote_url);
     }
+
+    println!("Pulling from {} (using {})...", remote_name, vcs.vcs_type());
+    vcs.pull(
+        &remote_name,
+        PullOptions {
+            branch: branch.as_deref(),
+            ssh_command: Some(&ssh_cmd),
+        },
+    )?;
 
     println!("Pull complete!");
     Ok(())

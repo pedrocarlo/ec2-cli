@@ -2,7 +2,7 @@ use dialoguer::Confirm;
 
 use crate::aws::client::AwsClients;
 use crate::aws::ec2::instance::{delete_security_group, terminate_instance, wait_for_terminated};
-use crate::git::{list_remotes, remove_remote};
+use crate::git::detect_vcs;
 use crate::state::{get_instance, remove_instance as remove_instance_state, resolve_instance_name};
 use crate::ui::create_spinner;
 use crate::{Ec2CliError, Result};
@@ -89,10 +89,12 @@ pub async fn execute(name: String, force: bool) -> Result<()> {
 
     // Try to remove git remote if it exists
     let remote_name = format!("ec2-{}", name);
-    if let Ok(remotes) = list_remotes() {
-        if remotes.contains(&remote_name) {
-            println!("  Removing git remote '{}'...", remote_name);
-            let _ = remove_remote(&remote_name);
+    if let Some(vcs) = detect_vcs() {
+        if let Ok(remotes) = vcs.list_remotes() {
+            if remotes.contains(&remote_name) {
+                println!("  Removing {} remote '{}'...", vcs.vcs_type(), remote_name);
+                let _ = vcs.remove_remote(&remote_name);
+            }
         }
     }
 

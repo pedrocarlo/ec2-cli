@@ -1,27 +1,9 @@
-use crate::git::{
-    add_remote, detect_vcs, git_push, jj_add_remote, jj_get_current_bookmark, jj_list_remotes,
-    jj_push, list_remotes, VcsType,
-};
+use crate::git::{detect_vcs, PushOptions};
 use crate::state::{get_instance, resolve_instance_name};
 use crate::user_data::validate_project_name;
 use crate::{Ec2CliError, Result};
-use std::process::Command;
 
 use super::ssm_ssh_command;
-
-/// Get the current git branch name
-fn get_current_branch() -> Result<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map_err(|e| Ec2CliError::Git(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(Ec2CliError::Git("Failed to get current branch".to_string()));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
 
 pub fn execute(name: String, branch: Option<String>) -> Result<()> {
     // Detect which VCS is in use
@@ -58,47 +40,26 @@ pub fn execute(name: String, branch: Option<String>) -> Result<()> {
     // Get SSH command for SSM
     let ssh_cmd = ssm_ssh_command(instance_state.ssh_key_path.as_deref());
 
-    match vcs {
-        VcsType::JJ => {
-            // Check if remote already exists
-            let remotes = jj_list_remotes()?;
-            if !remotes.contains(&remote_name) {
-                println!("Adding remote '{}': {}", remote_name, remote_url);
-                jj_add_remote(&remote_name, &remote_url)?;
-            }
-
-            // Get bookmark to push (use provided or detect current)
-            let bookmark_to_push = match branch {
-                Some(b) => Some(b),
-                None => jj_get_current_bookmark()?,
-            };
-
-            println!("Pushing to {} (using jj)...", remote_name);
-            jj_push(&remote_name, bookmark_to_push.as_deref(), Some(&ssh_cmd))?;
-        }
-        VcsType::Git => {
-            // Check if remote already exists
-            let remotes = list_remotes()?;
-            if !remotes.contains(&remote_name) {
-                println!("Adding remote '{}': {}", remote_name, remote_url);
-                add_remote(&remote_name, &remote_url)?;
-            }
-
-            // Get branch to push (use provided branch or current branch)
-            let branch_to_push = match branch {
-                Some(b) => b,
-                None => get_current_branch()?,
-            };
-
-            println!("Pushing to {}...", remote_name);
-            git_push(
-                &remote_name,
-                Some(&branch_to_push),
-                true, // always set upstream
-                Some(&ssh_cmd),
-            )?;
-        }
+    // Ensure remote exists
+    if vcs.ensure_remote(&remote_name, &remote_url)? {
+        println!("Adding remote '{}': {}", remote_name, remote_url);
     }
+
+    // Get branch to push (use provided or detect current)
+    let branch_to_push = match branch {
+        Some(b) => Some(b),
+        None => vcs.current_branch()?,
+    };
+
+    println!("Pushing to {} (using {})...", remote_name, vcs.vcs_type());
+    vcs.push(
+        &remote_name,
+        PushOptions {
+            branch: branch_to_push.as_deref(),
+            set_upstream: true,
+            ssh_command: Some(&ssh_cmd),
+        },
+    )?;
 
     println!("Push complete!");
     Ok(())
